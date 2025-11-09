@@ -1,0 +1,1191 @@
+{ ================================================
+  PROJECT MORPHEUS - MULTI-TIMEFRAME STRATEGY
+  Variable Naming Standards - See Header Above
+  ================================================ }
+
+Inputs: 
+	Input_AllowLong(True), Input_AllowShort(False),
+	Len_SMA1(21), Len_SMA2(50), Len_SMA3(150), Len_SMA4(200), Len_SMA5(105), 
+	Len_Stoch(14), Len_VolAvg(50);
+
+Arrays: 
+	SMASupports[3,4](0), 
+	SMAResistance[3,4](0);
+
+Variables:
+	{ System & Control }
+	Flag_PrintSMA14Dev(True), Num_PrevTextBar(0), ID_PrevText(0), 
+	Num_StartupBar(0), Price_OneTick(MinMove / PriceScale),
+	Factor_Price(0), Temp_Return(0), ID_TrendLine(0), ID_Text(0),
+	Loop_Timeframe(0), Loop_SMA(0), Flag_KDCross(False),
+	
+	{ Thresholds & Limits }
+	Threshold_RangeRatio(0.236),
+	Threshold_MaxRangeRatio(0.382),
+	Threshold_Stoch_OB(80), Threshold_Stoch_Neutral(50), Threshold_Stoch_OS(20),
+	Threshold_SMI_OB(40), Threshold_SMI_OS(-40),
+	Threshold_VolPctMin(0.3),
+	Threshold_DayDeclinePct(0.04), Threshold_GapDownPct(0.01), Threshold_GapMinutes(15),
+	
+	{ Coefficients }
+	Coeff_CloseSMA1Limit(236/2),
+	Coeff_MaxDistSMA12(3), Coeff_MaxDistSMA34(3.5),
+	Coeff_MaxGainFromLow(6), Coeff_ClosestSMAMaxDist(3),
+	Coeff_MinSwing(5), Coeff_StrandedRange(5),
+	Coeff_MaxDist_D(20), Coeff_MaxDist_1H(15), Coeff_MaxDist_15M(15),
+	Coeff_MinDevSMA14_D(15), Coeff_MinDevSMA14_1H(15), Coeff_MinDevSMA14_15M(15), 
+	Coeff_MinDevSMA14_5M(15), Coeff_MinDevSMA14_1M(15),
+	
+	{ Calculated Limits }
+	Limit_CloseSMA1_1M(0), Limit_CloseSMA1_5M(0, Data5), Limit_CloseSMA1_15M(0, Data4), 
+	Limit_CloseSMA1_1H(0, Data3), Limit_CloseSMA1_D(0, Data2),
+	Limit_MaxDistSMA12_1M(0), Limit_MaxDistSMA12_Tolerance(0), Limit_MaxDistSMA12_Dynamic(0),
+	Limit_MaxDistSMA34_1M(0), Limit_MaxGainFromLow(0),
+	Limit_ClosestSMAMaxDist(0), Limit_MinSwing(0), Limit_StrandedRange(0),
+	Limit_MaxDist_D(0, Data2), Limit_MaxDist_1H(0, Data3), Limit_MaxDist_15M(0, Data4),
+	Limit_MinDevSMA14_D(0, Data2), Limit_MinDevSMA14_1H(0, Data3), 
+	Limit_MinDevSMA14_15M(0, Data4), Limit_MinDevSMA14_5M(0, Data5), Limit_MinDevSMA14_1M(0),
+	
+	{ Entry Signals & Control }
+	Entry_Technical(0), Entry_Timeframe(0), Flag_EntryControl(0),
+	Entry_GapDown(0), Entry_EOD_HoldRule(0), Flag_NoEODBuy(False),
+	
+	{ Phase Detection Flags }
+	IsBullPhase_D(False), IsStrongBull_D(False), IsBullPhase_1H(False), IsStrongBull_1H(False),
+	IsBullPhase_15M(False), IsStrongBull_15M(False), IsBullPhase_5M(False), IsStrongBull_5M(False),
+	IsStrongBull_Multi(False), IsBearPhase_D(False), IsStrongBear_D(False), 
+	IsBearPhase_1H(False), IsStrongBear_1H(False), IsBearPhase_15M(False), IsStrongBear_15M(False),
+	IsBearPhase_5M(False), IsStrongBear_5M(False), IsStrongBear_Multi(False),
+	IsBullPhaseSMA3(False), IsBearPhaseSMA3(False),
+	
+	{ Condition Flags }
+	Has_SMA12Sandwich_1H(False), Has_SMA12BullSandwich_1H(False), 
+	Is_SMA1DistOK_1H(False), Has_ConsecDown_1H(False),
+	Is_D_BearSlope12_1H(False), Is_D_BearSlope1_1H(False), Is_D_BearSlope2_1H(False),
+	Is_D_BullSlope12_1H(False), Is_D_BullSlope1_1H(False), Is_D_BullSlope2_1H(False),
+	Is_SMIBearish_15M(False), Is_SMIBullish_15M(False),
+	Can_EntryLong_HTF(False), Can_GoLong(False), Can_GoShort(False),
+	Has_GapDown(False), Has_OSSupport_15M(False), Has_QuickOS_1H(False),
+	Has_BullReversal_15M(False), Has_BullishClose(False),
+	Has_TightSupport_1H(False), Has_TightSupport_D(False),
+	Is_SMAStranded(False), Is_NotFirstDown(True),
+	
+	{ Bar Counters }
+	Count_AboveSMA1_1M(0), Count_AboveSMA2_1M(0), Count_AboveSMA3_1M(0), Count_AboveSMA4_1M(0),
+	Count_AboveSMA1_D(0), Count_AboveSMA2_D(0), Count_AboveSMA3_D(0), Count_AboveSMA4_D(0),
+	Count_AboveSMA1_1H(0), Count_AboveSMA2_1H(0), Count_AboveSMA3_1H(0), Count_AboveSMA4_1H(0),
+	Count_AboveSMA1_15M(0), Count_AboveSMA2_15M(0), Count_AboveSMA3_15M(0), Count_AboveSMA4_15M(0),
+	Count_UnderSMA1_D(0), Count_UnderSMA2_D(0), Count_UnderSMA3_D(0), Count_UnderSMA4_D(0),
+	Count_UnderSMA1_1H(0), Count_UnderSMA2_1H(0), Count_UnderSMA3_1H(0), Count_UnderSMA4_1H(0),
+	Count_UnderSMA1_15M(0), Count_UnderSMA2_15M(0), Count_UnderSMA3_15M(0), Count_UnderSMA4_15M(0),
+	Count_SMA1SlopeUp(0), Count_SMA1MAUp(0), Count_SMA2SlopeUp(0), Count_SMA2MAUp(0),
+	Count_CloseHigher(0),
+	
+	{ Cross Bar Numbers }
+	Num_KDCrossUp_1M(0), Num_KDCrossDown_1M(0), Num_KDCrossUp_15M(0), Num_KDCrossDown_15M(0),
+	Num_SMICrossUp_1M(0), Num_SMICrossUp_15M(0), Num_SMICrossUp_1H(0), Num_SMICrossDown_15M(0),
+	Num_StochOSCrossUp_5M(0), Num_StochOBCrossDown_5M(0),
+	
+	{ Price Variables }
+	Range_RecentDay(0), High_RecentDay(0), Low_RecentDay(0),
+	High_RecentSwing(0), Low_RecentSwing(0), Low_RecentSwing2(0),
+	High_Recent(0), Low_Recent(0), Num_HighBar(0), Num_LowBar(0),
+	Low_AfterHigh(0), Num_LowAfterHighBar(0),
+	High_Max_15M(0, Data4), Limit_MaxDrop_15M(0, Data4), Low_Min_15M(0, Data4), Limit_MaxGain_15M(0, Data4),
+	High_Max_1H(0, Data3), Limit_MaxDrop_1H(0, Data3), Low_Min_1H(0, Data3), Limit_MaxGain_1H(0, Data3),
+	High_Max_D(0, Data2), Limit_MaxDrop_D(0, Data2), Low_Min_D(0, Data2), Limit_MaxGain_D(0, Data2),
+	Open_1H(-1), High_1H(0), Low_1H(0),
+	Open_15M(-1), High_15M(0), Low_15M(0),
+	Open_5M(-1), High_5M(0), Low_5M(0),
+	Low_Cycle_1M(Close), High_Cycle_1M(Close), 
+	Low_Cycle_5M(Close, Data5), High_Cycle_5M(Close, Data5),
+	Low_Cycle_15M(Close, Data4), High_Cycle_15M(Close, Data4),
+	Low_Cycle_1H(Close, Data3), High_Cycle_1H(Close, Data3),
+	
+	{ SMA Values - 1 Minute }
+	SMA1_1M(0), SMA2_1M(0), SMA3_1M(0), SMA4_1M(0), SMA5_1M(0),
+	
+	{ SMA Values - 5 Minute }
+	SMA1_5M(0, Data5), SMA2_5M(0, Data5), SMA3_5M(0, Data5), SMA4_5M(0, Data5),
+	SMA1_5M_Cur(0), SMA2_5M_Cur(0), SMA3_5M_Cur(0), SMA4_5M_Cur(0),
+	
+	{ SMA Values - 15 Minute }
+	SMA1_15M(0, Data4), SMA2_15M(0, Data4), SMA3_15M(0, Data4), SMA4_15M(0, Data4),
+	SMA1_15M_Cur(0), SMA2_15M_Cur(0), SMA3_15M_Cur(0), SMA4_15M_Cur(0),
+	
+	{ SMA Values - 1 Hour }
+	SMA1_1H(0, Data3), SMA2_1H(0, Data3), SMA3_1H(0, Data3), SMA4_1H(0, Data3),
+	SMA1_1H_Cur(0), SMA2_1H_Cur(0), SMA3_1H_Cur(0), SMA4_1H_Cur(0),
+	
+	{ SMA Values - Daily }
+	SMA1_D(0, Data2), SMA2_D(0, Data2), SMA3_D(0, Data2), SMA4_D(0, Data2),
+	SMA1_D_Cur(0), SMA2_D_Cur(0), SMA3_D_Cur(0), SMA4_D_Cur(0),
+	
+	{ SMA Slopes - 1 Minute }
+	SMA1_Slope_1M(0), SMA2_Slope_1M(0), SMA3_Slope_1M(0), SMA4_Slope_1M(0),
+	SMA1_SlopeMA_1M(0), SMA2_SlopeMA_1M(0), SMA3_SlopeMA_1M(0), SMA4_SlopeMA_1M(0),
+	SMA1_SlopeROC_1M(0), SMA2_SlopeROC_1M(0), SMA3_SlopeROC_1M(0), SMA4_SlopeROC_1M(0),
+	
+	{ SMA Slopes - 5 Minute }
+	SMA1_Slope_5M(0, Data5), SMA2_Slope_5M(0, Data5), SMA3_Slope_5M(0, Data5), SMA4_Slope_5M(0, Data5),
+	SMA1_Slope_5M_Cur(0), SMA2_Slope_5M_Cur(0), SMA3_Slope_5M_Cur(0), SMA4_Slope_5M_Cur(0),
+	
+	{ SMA Slopes - 15 Minute }
+	SMA1_Slope_15M(0, Data4), SMA2_Slope_15M(0, Data4), SMA3_Slope_15M(0, Data4), SMA4_Slope_15M(0, Data4),
+	SMA1_Slope_15M_Cur(0), SMA2_Slope_15M_Cur(0), SMA3_Slope_15M_Cur(0), SMA4_Slope_15M_Cur(0),
+	SMA1_SlopeROC_15M(0, Data4),
+	
+	{ SMA Slopes - 1 Hour }
+	SMA1_Slope_1H(0, Data3), SMA2_Slope_1H(0, Data3), SMA3_Slope_1H(0, Data3), SMA4_Slope_1H(0, Data3),
+	SMA1_Slope_1H_Cur(0), SMA2_Slope_1H_Cur(0), SMA3_Slope_1H_Cur(0), SMA4_Slope_1H_Cur(0),
+	SMA1_SlopeMA_1H(0, Data3), SMA1_SlopeROC_1H(0, Data3), SMA2_SlopeROC_1H(0, Data3),
+	
+	{ SMA Slopes - Daily }
+	SMA1_Slope_D(0, Data2), SMA2_Slope_D(0, Data2), SMA3_Slope_D(0, Data2), SMA4_Slope_D(0, Data2),
+	SMA1_Slope_D_Cur(0), SMA2_Slope_D_Cur(0), SMA3_Slope_D_Cur(0), SMA4_Slope_D_Cur(0),
+	SMA1_SlopeROC_D(0, Data2),
+	
+	{ Stochastic - 1 Minute }
+	Stoch_FastK_1M(0), Stoch_FastD_1M(0), Stoch_SlowK_1M(0), Stoch_SlowD_1M(0),
+	
+	{ Stochastic - 5 Minute }
+	Stoch_FastK_5M(0, Data5), Stoch_FastD_5M(0, Data5), Stoch_SlowK_5M(0, Data5), Stoch_SlowD_5M(0, Data5),
+	Stoch_FastK_5M_Cur(0), Stoch_FastD_5M_Cur(0), Stoch_SlowK_5M_Cur(0), Stoch_SlowD_5M_Cur(0),
+	
+	{ Stochastic - 15 Minute }
+	Stoch_FastK_15M(0, Data4), Stoch_FastD_15M(0, Data4), Stoch_SlowK_15M(0, Data4), Stoch_SlowD_15M(0, Data4),
+	Stoch_FastK_15M_Cur(0), Stoch_FastD_15M_Cur(0), Stoch_SlowK_15M_Cur(0), Stoch_SlowD_15M_Cur(0),
+	
+	{ Stochastic - 1 Hour }
+	Stoch_FastK_1H(0, Data3), Stoch_FastD_1H(0, Data3), Stoch_SlowK_1H(0, Data3), Stoch_SlowD_1H(0, Data3),
+	Stoch_FastK_1H_Cur(0), Stoch_FastD_1H_Cur(0), Stoch_SlowK_1H_Cur(0), Stoch_SlowD_1H_Cur(0),
+	
+	{ Stochastic - Daily }
+	Stoch_FastK_D(0, Data2), Stoch_FastD_D(0, Data2), Stoch_SlowK_D(0, Data2), Stoch_SlowD_D(0, Data2),
+	Stoch_FastK_D_Cur(0), Stoch_FastD_D_Cur(0), Stoch_SlowK_D_Cur(0), Stoch_SlowD_D_Cur(0),
+	
+	{ SMI - Stochastic Momentum Index }
+	Len_SMI1(14), Len_SMI2(21), Len_SMI3(2),
+	SMI_Value_1M(0), SMI_Value_5M(0, Data5), SMI_Value_15M(0, Data4), SMI_Value_1H(0, Data3),
+	SMI_Value_5M_Cur(0), SMI_Value_15M_Cur(0), SMI_Value_1H_Cur(0),
+	
+	{ Other Indicators }
+	Len_Momentum(21), Momentum_Value(0),
+	Volatility_Pct(0),
+	Len_ChaikinFast(9), Len_ChaikinSlow(21), Chaikin_Value(0),
+	Avg_PriceRange(0),
+	Volume_1M(0), Volume_Avg_1M(0),
+	Volume_1H(0), Volume_Avg_1H(0),
+	Dist_SMA12_1M(0), Diff_PriceSMA(0), Ratio_GainFromLow(0),
+	Num_SupportSMA(0), Num_ResistSMA(0), Num_ClosestSMA(0), 
+	Dist_ClosestSMA(0), Num_ClosestResistSMA(0), Max_SMASupports(0),
+	Len_SwingLookup(21),
+	
+	{ Debug Variables - Keep Original Names for Now }
+	IM(Text), ok(False), Okp(False) ;
+
+{ For Debugging. Leave False. This converted to true by Date Time function call at the bottom of the code }
+IM = ("MySTGY," + numtostr(d,0) + "," + numtostr(t,0) + "," + GetSymbolName + ":" + numtostr(Barinterval,0) + ",");
+
+{ ============================================
+  SECTION 2: INITIALIZATION & CONSTANTS
+  ============================================ }
+
+{ Calculate startup bar when all data series become available }
+Once Num_StartupBar = Len_SMA1 * 6.5 * 60 * 1.1 ;
+
+{ ============================================
+  SECTION 3: SMA CALCULATIONS
+  ============================================ }
+
+{ 3.1: Current Timeframe (1-Minute) }
+SMA1_1M = AverageFC(Close, Len_SMA1) ;
+SMA2_1M = AverageFC(Close, Len_SMA2) ;
+SMA3_1M = AverageFC(Close, Len_SMA3) ;
+SMA4_1M = AverageFC(Close, Len_SMA4) ;
+SMA5_1M = AverageFC(Close, Len_SMA5) ;
+
+{ 3.2: 5-Minute Timeframe }
+SMA1_5M = Average(Close of Data5, Len_SMA1) ;
+SMA2_5M = Average(Close of Data5, Len_SMA2) ;
+SMA3_5M = Average(Close of Data5, Len_SMA3) ;
+SMA4_5M = Average(Close of Data5, Len_SMA4) ;
+If BarStatus(5) <> 2 Then
+Begin
+	SMA1_5M_Cur = (SMA1_5M * Len_SMA1 - Close[Len_SMA1-1] of Data5 + Close) / Len_SMA1 ;
+	SMA2_5M_Cur = (SMA2_5M * Len_SMA2 - Close[Len_SMA2-1] of Data5 + Close) / Len_SMA2 ;
+	SMA3_5M_Cur = (SMA3_5M * Len_SMA3 - Close[Len_SMA3-1] of Data5 + Close) / Len_SMA3 ;
+	SMA4_5M_Cur = (SMA4_5M * Len_SMA4 - Close[Len_SMA4-1] of Data5 + Close) / Len_SMA4 ;
+End
+Else
+Begin
+	SMA1_5M_Cur = SMA1_5M ;
+	SMA2_5M_Cur = SMA2_5M ;
+	SMA3_5M_Cur = SMA3_5M ;
+	SMA4_5M_Cur = SMA4_5M ;
+End;
+
+{ 3.3: 15-Minute Timeframe }
+SMA1_15M = Average(Close of Data4, Len_SMA1) ;
+SMA2_15M = Average(Close of Data4, Len_SMA2) ;
+SMA3_15M = Average(Close of Data4, Len_SMA3) ;
+SMA4_15M = Average(Close of Data4, Len_SMA4) ;
+If BarStatus(4) <> 2 Then
+Begin
+	SMA1_15M_Cur = (SMA1_15M * Len_SMA1 - Close[Len_SMA1-1] of Data4 + Close) / Len_SMA1 ;
+	SMA2_15M_Cur = (SMA2_15M * Len_SMA2 - Close[Len_SMA2-1] of Data4 + Close) / Len_SMA2 ;
+	SMA3_15M_Cur = (SMA3_15M * Len_SMA3 - Close[Len_SMA3-1] of Data4 + Close) / Len_SMA3 ;
+	SMA4_15M_Cur = (SMA4_15M * Len_SMA4 - Close[Len_SMA4-1] of Data4 + Close) / Len_SMA4 ;
+End
+Else
+Begin
+	SMA1_15M_Cur = SMA1_15M ;
+	SMA2_15M_Cur = SMA2_15M ;
+	SMA3_15M_Cur = SMA3_15M ;
+	SMA4_15M_Cur = SMA4_15M ;
+End;
+
+{ 3.4: 1-Hour Timeframe }
+SMA1_1H = Average(Close of Data3, Len_SMA1) ;
+SMA2_1H = Average(Close of Data3, Len_SMA2) ;
+SMA3_1H = Average(Close of Data3, Len_SMA3) ;
+SMA4_1H = Average(Close of Data3, Len_SMA4) ;
+If BarStatus(3) <> 2 Then
+Begin
+	SMA1_1H_Cur = (SMA1_1H * Len_SMA1 - Close[Len_SMA1-1] of Data3 + Close) / Len_SMA1 ;
+	SMA2_1H_Cur = (SMA2_1H * Len_SMA2 - Close[Len_SMA2-1] of Data3 + Close) / Len_SMA2 ;
+	SMA3_1H_Cur = (SMA3_1H * Len_SMA3 - Close[Len_SMA3-1] of Data3 + Close) / Len_SMA3 ;
+	SMA4_1H_Cur = (SMA4_1H * Len_SMA4 - Close[Len_SMA4-1] of Data3 + Close) / Len_SMA4 ;
+End
+Else
+Begin
+	SMA1_1H_Cur = SMA1_1H ;
+	SMA2_1H_Cur = SMA2_1H ;
+	SMA3_1H_Cur = SMA3_1H ;
+	SMA4_1H_Cur = SMA4_1H ;
+End;
+
+{ 3.5: Daily Timeframe }
+SMA1_D = Average(Close of Data2, Len_SMA1) ;
+SMA2_D = Average(Close of Data2, Len_SMA2) ;
+SMA3_D = Average(Close of Data2, Len_SMA3) ;
+SMA4_D = Average(Close of Data2, Len_SMA4) ;
+If BarStatus(2) <> 2 Then
+Begin
+	SMA1_D_Cur = (SMA1_D * Len_SMA1 - Close[Len_SMA1-1] of Data2 + Close) / Len_SMA1 ;
+	SMA2_D_Cur = (SMA2_D * Len_SMA2 - Close[Len_SMA2-1] of Data2 + Close) / Len_SMA2 ;
+	SMA3_D_Cur = (SMA3_D * Len_SMA3 - Close[Len_SMA3-1] of Data2 + Close) / Len_SMA3 ;
+	SMA4_D_Cur = (SMA4_D * Len_SMA4 - Close[Len_SMA4-1] of Data2 + Close) / Len_SMA4 ;
+End
+Else
+Begin
+	SMA1_D_Cur = SMA1_D ;
+	SMA2_D_Cur = SMA2_D ;
+	SMA3_D_Cur = SMA3_D ;
+	SMA4_D_Cur = SMA4_D ;
+End;
+
+{ ============================================
+  SECTION 4: BASIC PARAMETERS & INDICATORS
+  ============================================ }
+
+{ Factor to normalize price movement for all symbols }
+Factor_Price = 100 / Price_OneTick / (SMA1_1M + 0.000000001) ;
+
+{ Calculate Stochastic for current timeframe }
+Temp_Return = Stochastic(High, Low, Close, Len_Stoch, 3, 3, 1, Stoch_FastK_1M, Stoch_FastD_1M, Stoch_SlowK_1M, Stoch_SlowD_1M);
+
+{ Calculate limits based on coefficients }
+Limit_ClosestSMAMaxDist = Coeff_ClosestSMAMaxDist / 1000 * SMA1_1M ;
+Limit_MaxDistSMA12_1M = Coeff_MaxDistSMA12 / 1000 * SMA1_1M ;
+Limit_MaxDistSMA12_Tolerance = Coeff_MaxDistSMA12 / 1000 * Threshold_MaxRangeRatio * SMA1_1M ;
+Limit_MaxDistSMA34_1M = Coeff_MaxDistSMA34 / 1000 * SMA1_1M ;
+Limit_MaxGainFromLow = Coeff_MaxGainFromLow / 1000 * SMA1_1M ;
+Limit_MinSwing = Coeff_MinSwing / 1000 * SMA1_1M ;
+Limit_StrandedRange = Coeff_StrandedRange / 1000 * SMA1_1M ;
+Limit_MaxDist_D = Coeff_MaxDist_D / 1000 * SMA1_D ;
+Limit_MaxDist_1H = Coeff_MaxDist_1H / 1000 * SMA1_1H ;
+Limit_MaxDist_15M = Coeff_MaxDist_15M / 1000 * SMA1_15M ;
+Limit_MinDevSMA14_D = Coeff_MinDevSMA14_D / 1000 * SMA1_D ;
+Limit_MinDevSMA14_1H = Coeff_MinDevSMA14_1H / 1000 * SMA1_1H ;
+Limit_MinDevSMA14_15M = Coeff_MinDevSMA14_15M / 1000 * SMA1_15M ;
+Limit_MinDevSMA14_5M = Coeff_MinDevSMA14_5M / 1000 * SMA1_5M ;
+Limit_MinDevSMA14_1M = Coeff_MinDevSMA14_1M / 1000 * SMA1_1M ;
+
+{ Buyable SMA1 Distance Calculation }
+Limit_CloseSMA1_1M = Coeff_CloseSMA1Limit / 1000 * (SMA4_1M - SMA1_1M) ;
+Limit_CloseSMA1_5M = Coeff_CloseSMA1Limit / 1000 * (SMA4_5M - SMA1_5M) ;
+Limit_CloseSMA1_15M = Coeff_CloseSMA1Limit / 1000 * (SMA4_15M - SMA1_15M) ;
+Limit_CloseSMA1_1H = Coeff_CloseSMA1Limit / 1000 * (SMA4_1H - SMA1_1H) ;
+Limit_CloseSMA1_D = Coeff_CloseSMA1Limit / 1000 * (SMA4_D - SMA1_D) ;
+
+{ ============================================
+  SECTION 5: HIGH/LOW/OPEN TRACKING
+  ============================================ }
+
+{ High/Low/Open within a 1-Hour Bar }
+If Open_1H = -1 Then
+Begin
+	High_1H = High ;
+	Low_1H = Low ;
+	Open_1H = Open ;
+End ;
+If High > High_1H Then High_1H = High ;
+If Low < Low_1H Then Low_1H = Low ;
+
+{ High/Low/Open within a 15-Minute Bar }
+If Open_15M = -1 Then
+Begin
+	High_15M = High ;
+	Low_15M = Low ;
+	Open_15M = Open ;
+End ;
+If High > High_15M Then High_15M = High ;
+If Low < Low_15M Then Low_15M = Low ;
+
+{ High/Low/Open within a 5-Minute Bar }
+If Open_5M = -1 Then
+Begin
+	High_5M = High ;
+	Low_5M = Low ;
+	Open_5M = Open ;
+End ;
+If High > High_5M Then High_5M = High ;
+If Low < Low_5M Then Low_5M = Low ;
+
+{ ============================================
+  SECTION 6: OSCILLATORS & MOMENTUM
+  ============================================ }
+
+{ Momentum Indicator }
+Momentum_Value = Momentum(Close, Len_Momentum) ;
+
+{ Percentage volatility in the past 21 bars }
+Volatility_Pct = (Highest(Close, Len_SMA1) - Lowest(Close, Len_SMA1)) / SMA1_1M * 100;
+
+{ Stochastic Momentum Index Calculation }
+SMI_Value_1M = SMI(Len_SMI1, Len_SMI2, Len_SMI3);
+
+{ SMA1-SMA2 Distance }
+Dist_SMA12_1M = SMA1_1M - SMA2_1M ;
+
+{ Average Price Range }
+Avg_PriceRange = AverageFC(Range, Len_SMA1) ;
+
+{ Volume Calculation }
+If BarType >= 2 and BarType < 5 then
+Begin
+	Volume_1M = Volume ;
+	Volume_Avg_1M = AverageFC(Volume, Len_VolAvg) ; 
+End
+Else
+Begin
+	Volume_1M = Ticks ;
+	Volume_Avg_1M = AverageFC(Ticks, Len_VolAvg) ;
+End;
+
+If BarType of Data3 >= 2 and BarType of Data3 < 5 then
+Begin
+	Volume_1H = Volume of Data3 ;
+	Volume_Avg_1H = Average(Volume of Data3, Len_VolAvg) of Data3 ; 
+End
+Else
+Begin
+	Volume_1H = Ticks of Data3 ;
+	Volume_Avg_1H = Average(Ticks of Data3, Len_VolAvg) of Data3 ;
+End;
+
+{ ChaikinOSC Calculation }
+Chaikin_Value = ChaikinOsc(Volume_1M, Len_ChaikinFast, Len_ChaikinSlow) ;
+
+{ ============================================
+  SECTION 7: SMA SLOPES & SMOOTHING
+  ============================================ }
+
+{ 7.1: 1-Minute Slopes }
+SMA1_Slope_1M = CMO(Len_SMA1) ; 
+SMA1_SlopeMA_1M = LinearRegValueFC(SMA1_Slope_1M, Len_SMA1, 0) ;
+SMA1_SlopeROC_1M = LinearRegSlopeFC(SMA1_Slope_1M, Len_SMA1) * 10 ;
+SMA2_Slope_1M = CMO(Len_SMA2) ;
+SMA2_SlopeMA_1M = LinearRegValueFC(SMA2_Slope_1M, Len_SMA2, 0) ;
+SMA2_SlopeROC_1M = LinearRegSlopeFC(SMA2_Slope_1M, Len_SMA2) * 25 ;
+SMA3_Slope_1M = CMO(Len_SMA3) ;
+SMA3_SlopeMA_1M = LinearRegValueFC(SMA3_Slope_1M, Len_SMA3, 0) ;
+SMA3_SlopeROC_1M = LinearRegSlopeFC(SMA3_Slope_1M, Len_SMA3) * 75 ;
+SMA4_Slope_1M = CMO(Len_SMA4) ;
+SMA4_SlopeMA_1M = LinearRegValueFC(SMA4_Slope_1M, Len_SMA4, 0) ;
+SMA4_SlopeROC_1M = LinearRegSlopeFC(SMA4_Slope_1M, Len_SMA4) * 100 ;
+
+{ 7.2: Daily Slopes }
+SMA1_Slope_D = CMO(Len_SMA1) of Data2 ; 
+SMA1_Slope_D_Cur = MyCMODaily(Len_SMA1) ; 
+SMA2_Slope_D = CMO(Len_SMA2) of Data2 ; 
+SMA2_Slope_D_Cur = MyCMODaily(Len_SMA2) ;
+SMA3_Slope_D = CMO(Len_SMA3) of Data2 ; 
+SMA3_Slope_D_Cur = MyCMODaily(Len_SMA3) ; 
+SMA4_Slope_D = CMO(Len_SMA4) of Data2 ; 
+SMA4_Slope_D_Cur = MyCMODaily(Len_SMA4) ;
+
+{ 7.3: 1-Hour Slopes }
+SMA1_Slope_1H = CMO(Len_SMA1) of Data3 ;
+SMA1_Slope_1H_Cur = MyCMO60Min(Len_SMA1) ; 
+SMA2_Slope_1H = CMO(Len_SMA2) of Data3 ;
+SMA2_Slope_1H_Cur = MyCMO60Min(Len_SMA2) ; 
+SMA3_Slope_1H = CMO(Len_SMA3) of Data3 ;
+SMA3_Slope_1H_Cur = MyCMO60Min(Len_SMA3) ; 
+SMA4_Slope_1H = CMO(Len_SMA4) of Data3 ;
+SMA4_Slope_1H_Cur = MyCMO60Min(Len_SMA4) ; 
+
+{ 7.4: 15-Minute Slopes }
+SMA1_Slope_15M = CMO(Len_SMA1) of Data4 ;
+SMA1_Slope_15M_Cur = MyCMO15Min(Len_SMA1) ; 
+SMA2_Slope_15M = CMO(Len_SMA2) of Data4 ;
+SMA2_Slope_15M_Cur = MyCMO15Min(Len_SMA2) ; 
+SMA3_Slope_15M = CMO(Len_SMA3) of Data4 ;
+SMA3_Slope_15M_Cur = MyCMO15Min(Len_SMA3) ; 
+SMA4_Slope_15M = CMO(Len_SMA4) of Data4 ;
+SMA4_Slope_15M_Cur = MyCMO15Min(Len_SMA4) ; 
+
+{ 7.5: 5-Minute Slopes }
+SMA1_Slope_5M = CMO(Len_SMA1) of Data5 ;
+SMA1_Slope_5M_Cur = MyCMO5Min(Len_SMA1) ; 
+SMA2_Slope_5M = CMO(Len_SMA2) of Data5 ;
+SMA2_Slope_5M_Cur = MyCMO5Min(Len_SMA2) ; 
+SMA3_Slope_5M = CMO(Len_SMA3) of Data5 ;
+SMA3_Slope_5M_Cur = MyCMO5Min(Len_SMA3) ; 
+SMA4_Slope_5M = CMO(Len_SMA4) of Data5 ;
+SMA4_Slope_5M_Cur = MyCMO5Min(Len_SMA4) ;
+
+{ ============================================
+  SECTION 8: MULTI-TIMEFRAME CALCULATIONS
+  ============================================ }
+
+{ Currentbar > Num_StartupBar check to avoid spurious results }
+If CurrentBar > Num_StartupBar Then
+Begin
+Once ID_TrendLine = Tl_New(Date, Time, Close * 1.01, Date, Time, Close * 0.99); 
+
+{ Calculate Recent Days Range and Low }
+High_RecentDay = Maxlist(HighD(0), HighD(1), HighD(2)) ;
+If HighD(0) >= High_RecentDay Then
+Begin
+	High_RecentDay = HighD(0) ;
+	Low_RecentDay = LowD(0) ;
+End
+Else If LowD(0) > LowD(1) Then
+Begin
+	Low_RecentDay = LowD(1) ;
+End
+Else
+Begin
+	High_RecentDay = Maxlist(HighD(0), HighD(1)) ;
+	Low_RecentDay = LowD(0); 
+End ;
+Range_RecentDay = High_RecentDay - Low_RecentDay ;
+
+{ Calculate Higher Time Frame Slope Smooth and Smooth Slope }
+SMA1_SlopeMA_1H = LinearRegValueFC(SMA1_Slope_1H, Len_SMA1, 0) ;
+SMA1_SlopeROC_1H = LinearRegSlopeFC(SMA1_Slope_1H, Len_SMA1) * 10 ;
+SMA2_SlopeROC_1H = LinearRegSlopeFC(SMA2_Slope_1H, Len_SMA1) * 10 ;
+
+{ Stochastic Momentum Index for Higher Time Frames }
+SMI_Value_1H = SMI(Len_SMI1, Len_SMI2, Len_SMI3) of Data3 ;
+SMI_Value_15M = SMI(Len_SMI1, Len_SMI2, Len_SMI3) of Data4 ;
+SMI_Value_5M = SMI(Len_SMI1, Len_SMI2, Len_SMI3) of Data5 ;
+SMI_Value_5M_Cur = MySMI5Min(Len_SMI1, Len_SMI2, Len_SMI3) ;
+SMI_Value_1H_Cur = MySMI60Min(Len_SMI1, Len_SMI2, Len_SMI3) ;
+SMI_Value_15M_Cur = MySMI15Min(Len_SMI1, Len_SMI2, Len_SMI3) ;
+
+{ Slow Stochastic for Higher Time Frames }
+Temp_Return = Stochastic(High of Data2, Low of Data2, Close of Data2, Len_Stoch, 3, 3, 1, Stoch_FastK_D, Stoch_FastD_D, Stoch_SlowK_D, Stoch_SlowD_D) of Data2 ;
+Temp_Return = Stochastic(High of Data3, Low of Data3, Close of Data3, Len_Stoch, 3, 3, 1, Stoch_FastK_1H, Stoch_FastD_1H, Stoch_SlowK_1H, Stoch_SlowD_1H) of Data3 ;
+Temp_Return = Stochastic(High of Data4, Low of Data4, Close of Data4, Len_Stoch, 3, 3, 1, Stoch_FastK_15M, Stoch_FastD_15M, Stoch_SlowK_15M, Stoch_SlowD_15M) of Data4 ;
+Temp_Return = Stochastic(High of Data5, Low of Data5, Close of Data5, Len_Stoch, 3, 3, 1, Stoch_FastK_5M, Stoch_FastD_5M, Stoch_SlowK_5M, Stoch_SlowD_5M) of Data5 ;
+Temp_Return = MyStochasticDaily(Len_Stoch, 3, 3, Stoch_FastK_D_Cur, Stoch_FastD_D_Cur, Stoch_SlowK_D_Cur, Stoch_SlowD_D_Cur) ;
+Temp_Return = MyStochastic60Min(Len_Stoch, 3, 3, Stoch_FastK_1H_Cur, Stoch_FastD_1H_Cur, Stoch_SlowK_1H_Cur, Stoch_SlowD_1H_Cur) ;
+Temp_Return = MyStochastic15Min(Len_Stoch, 3, 3, Stoch_FastK_15M_Cur, Stoch_FastD_15M_Cur, Stoch_SlowK_15M_Cur, Stoch_SlowD_15M_Cur) ;
+Temp_Return = MyStochastic5Min(Len_Stoch, 3, 3, Stoch_FastK_5M_Cur, Stoch_FastD_5M_Cur, Stoch_SlowK_5M_Cur, Stoch_SlowD_5M_Cur) ;
+
+{ Calculate SMA Stranded }
+Value1 = (SMA1_1M + SMA2_1M + SMA3_1M + SMA4_1M) / 4;
+Value2 = ABSValue(SMA1_1M - Value1) + ABSValue(SMA2_1M - Value1) + ABSValue(SMA3_1M - Value1) + ABSValue(SMA4_1M - Value1);
+If Value2 <= Limit_StrandedRange Then
+	Is_SMAStranded = True
+Else
+	Is_SMAStranded = False;
+
+{ ============================================
+  SECTION 9: BAR COUNTERS
+  ============================================ }
+
+{ How Many Continuous Bars Above Every SMA - 1 Minute }
+If Close >= SMA1_1M then Count_AboveSMA1_1M = Count_AboveSMA1_1M + 1
+Else If High > SMA1_1M and Low < SMA1_1M and SMA1_1M - Close <= Price_OneTick Then Count_AboveSMA1_1M = Count_AboveSMA1_1M + 1
+Else If Count_AboveSMA1_1M > 0 then Count_AboveSMA1_1M = Count_AboveSMA1_1M - 1 ;
+If Count_AboveSMA1_1M > 2
+	and Count_AboveSMA1_1M < Count_AboveSMA1_1M[1]
+	and Count_AboveSMA1_1M[1] < Count_AboveSMA1_1M[2]
+Then Count_AboveSMA1_1M = 0 ;
+
+If Close >= SMA2_1M then Count_AboveSMA2_1M = Count_AboveSMA2_1M + 1
+Else If High > SMA2_1M and Low < SMA2_1M and SMA2_1M - Close <= Price_OneTick Then Count_AboveSMA2_1M = Count_AboveSMA2_1M + 1
+Else If Count_AboveSMA2_1M > 0 then Count_AboveSMA2_1M = Count_AboveSMA2_1M - 1 ;
+If Count_AboveSMA2_1M > 2
+	and Count_AboveSMA2_1M < Count_AboveSMA2_1M[1]
+	and Count_AboveSMA2_1M[1] < Count_AboveSMA2_1M[2]
+Then Count_AboveSMA2_1M = 0 ;
+
+If Close >= SMA3_1M then Count_AboveSMA3_1M = Count_AboveSMA3_1M + 1
+Else If High > SMA3_1M and Low < SMA3_1M and SMA3_1M - Close <= Price_OneTick Then Count_AboveSMA3_1M = Count_AboveSMA3_1M + 1
+Else If Count_AboveSMA3_1M > 0 then Count_AboveSMA3_1M = Count_AboveSMA3_1M - 1 ;
+If Count_AboveSMA3_1M > 2
+	and Count_AboveSMA3_1M < Count_AboveSMA3_1M[1]
+	and Count_AboveSMA3_1M[1] < Count_AboveSMA3_1M[2]
+Then Count_AboveSMA3_1M = 0 ;
+
+If Close >= SMA4_1M then Count_AboveSMA4_1M = Count_AboveSMA4_1M + 1
+Else If High > SMA4_1M and Low < SMA4_1M and SMA4_1M - Close <= Price_OneTick Then Count_AboveSMA4_1M = Count_AboveSMA4_1M + 1
+Else If Count_AboveSMA4_1M > 0 then Count_AboveSMA4_1M = Count_AboveSMA4_1M - 1 ;
+If Count_AboveSMA4_1M > 2
+	and Count_AboveSMA4_1M < Count_AboveSMA4_1M[1]
+	and Count_AboveSMA4_1M[1] < Count_AboveSMA4_1M[2]
+Then Count_AboveSMA4_1M = 0 ;
+
+{ How Many Continuous Bars Close Higher Than prior bar }
+If Close > Close[1] then Count_CloseHigher = Count_CloseHigher + 1
+Else Count_CloseHigher = 0;
+
+{ How Many Continuous Bars with SMA1 Slope and SlopeMA up }
+If SMA1_Slope_1M > SMA1_Slope_1M[1] then Count_SMA1SlopeUp = Count_SMA1SlopeUp + 1
+Else Count_SMA1SlopeUp = 0;
+If SMA1_SlopeMA_1M > SMA1_SlopeMA_1M[1] then Count_SMA1MAUp = Count_SMA1MAUp + 1
+Else Count_SMA1MAUp = 0;
+
+{ How Many Continuous Bars with SMA2 Slope and SlopeMA up }
+If SMA2_Slope_1M > SMA2_Slope_1M[1] then Count_SMA2SlopeUp = Count_SMA2SlopeUp + 1
+Else Count_SMA2SlopeUp = 0;
+If SMA2_SlopeROC_1M > 0 then Count_SMA2MAUp = Count_SMA2MAUp + 1
+Else Count_SMA2MAUp = 0;
+
+{ ============================================
+  SECTION 10: CROSS DETECTION
+  ============================================ }
+
+{ Calculate Cross Up & Down - 1 Minute }
+If Stoch_SlowK_1M cross over Stoch_SlowD_1M then Num_KDCrossUp_1M = CurrentBar ;
+If Stoch_SlowK_1M cross under Stoch_SlowD_1M then Num_KDCrossDown_1M = CurrentBar ;
+If SMI_Value_1M Cross Above 0 then Num_SMICrossUp_1M = CurrentBar ;
+
+{ SMI 15-Minute Cross over/under thresholds }
+If SMI_Value_15M Cross Above Threshold_SMI_OS then Num_SMICrossUp_15M = CurrentBar of Data4 ;
+If SMI_Value_15M Cross Under Threshold_SMI_OB then Num_SMICrossDown_15M = CurrentBar of Data4 ;
+
+{ Stochastic 15-Minute SlowK Cross over SlowD }
+If BarStatus(4) = 2 Then
+Begin
+	If Stoch_SlowK_15M cross over Stoch_SlowD_15M then Num_KDCrossUp_15M = CurrentBar of Data4 ;
+End
+Else If Stoch_SlowK_15M < Stoch_SlowD_15M and Stoch_SlowK_15M_Cur > Stoch_SlowD_15M_Cur Then Num_KDCrossUp_15M = CurrentBar of Data4
+Else Num_KDCrossUp_15M = 0 ;
+
+{ Stochastic 15-Minute SlowK Cross under SlowD }
+If BarStatus(4) = 2 Then
+Begin
+	If Stoch_SlowK_15M cross under Stoch_SlowD_15M then Num_KDCrossDown_15M = CurrentBar of Data4 ;
+End
+Else If Stoch_SlowK_15M > Stoch_SlowD_15M and Stoch_SlowK_15M_Cur < Stoch_SlowD_15M_Cur Then Num_KDCrossDown_15M = CurrentBar of Data4
+Else Num_KDCrossDown_15M = 0 ;
+
+{ Stochastic 5-Minute SlowK Cross over Oversold }
+If BarStatus(5) = 2 Then
+Begin
+	If Stoch_SlowK_5M cross over Threshold_Stoch_OS then Num_StochOSCrossUp_5M = CurrentBar of Data5 ;
+End
+Else If Stoch_SlowK_5M < Threshold_Stoch_OS and Stoch_SlowK_5M_Cur > Threshold_Stoch_OS Then Num_StochOSCrossUp_5M = CurrentBar of Data5
+Else Num_StochOSCrossUp_5M = 0 ;
+
+{ Stochastic 5-Minute SlowK Cross under Overbought }
+If BarStatus(5) = 2 Then
+Begin
+	If Stoch_SlowK_5M cross under Threshold_Stoch_OB then Num_StochOBCrossDown_5M = CurrentBar of Data5 ;
+End
+Else If Stoch_SlowK_5M > Threshold_Stoch_OB and Stoch_SlowK_5M_Cur < Threshold_Stoch_OB Then Num_StochOBCrossDown_5M = CurrentBar of Data5
+Else Num_StochOBCrossDown_5M = 0 ;
+
+{ ============================================
+  SECTION 11: SUPPORT & RESISTANCE
+  ============================================ }
+
+{ Decide which SMA close is above }
+If Close > SMA1_1M Then Num_SupportSMA = 1
+Else If Close > SMA2_1M Then Num_SupportSMA = 2
+Else If Close > SMA3_1M Then Num_SupportSMA = 3
+Else If Close > SMA4_1M Then Num_SupportSMA = 4
+Else Num_SupportSMA = 0 ;
+
+{ Decide which SMA close is under }
+If Close < SMA1_1M Then Num_ResistSMA = 1
+Else If Close < SMA2_1M Then Num_ResistSMA = 2
+Else If Close < SMA3_1M Then Num_ResistSMA = 3
+Else If Close < SMA4_1M Then Num_ResistSMA = 4
+Else Num_ResistSMA = 0 ;
+
+{ ============================================
+  SECTION 12: SWING HIGH/LOW CALCULATION
+  ============================================ }
+
+{ Get RecentHigh, Low_AfterHigh and the RecentLow }
+High_RecentSwing = SwingHigh(1, High, 4, Len_SwingLookup);
+High_Recent = Highest(High, Len_SwingLookup);
+Num_HighBar = HighestBar(High, Len_SwingLookup);
+If High_RecentSwing <> -1 and High_Recent < High_RecentSwing then
+Begin
+	High_Recent = High_RecentSwing;
+	Num_HighBar = SwingHighBar(1, High, 4, Len_SwingLookup);
+End;
+Low_AfterHigh = Lowest(Low, Num_HighBar);
+Num_LowAfterHighBar = LowestBar(Low, Num_HighBar);
+Low_RecentSwing = SwingLow(1, Low, 4, Len_SwingLookup);
+Low_RecentSwing2 = SwingLow(2, Low, 4, Len_SwingLookup);
+If Low_RecentSwing = -1 then
+Begin
+	Low_Recent = Lowest(Low, Len_SwingLookup);
+	Num_LowBar = LowestBar(Low, Len_SwingLookup);
+End	
+Else
+Begin
+	If Low_RecentSwing <> Low_AfterHigh then
+	Begin 
+		Low_Recent = Low_RecentSwing;
+		Num_LowBar = SwinglowBar(1, Low, 4, Len_SwingLookup);
+	End
+	Else If Low_RecentSwing2 <> -1 then
+	Begin
+		Low_Recent = Low_RecentSwing2;
+		Num_LowBar = SwinglowBar(2, Low, 4, Len_SwingLookup);
+	End
+	Else
+	Begin
+		Low_Recent = Low_AfterHigh;
+		Num_LowBar = Num_LowAfterHighBar;
+	End;	
+End;
+
+{ ============================================
+  SECTION 13: CYCLE HIGH/LOW TRACKING
+  ============================================ }
+
+{ Find Cycle High and Lows }
+If Close of Data5 > SMA1_5M and SMA1_Slope_5M > 0 Then Low_Cycle_1M = Close ;
+If Close < Low_Cycle_1M Then Low_Cycle_1M = Close ;
+If Close of Data5 < SMA1_5M and SMA1_Slope_5M < 0 Then High_Cycle_1M = Close ;
+If Close > High_Cycle_1M Then High_Cycle_1M = Close ;
+
+If Close of Data4 > SMA1_15M and SMA1_Slope_15M > 0 Then Low_Cycle_5M = Close of Data5 ;
+If Close of Data5 < Low_Cycle_5M Then Low_Cycle_5M = Close of Data5 ;
+If Close of Data4 < SMA1_15M and SMA1_Slope_15M < 0 Then High_Cycle_5M = Close of Data5 ;
+If Close of Data5 > High_Cycle_5M Then High_Cycle_5M = Close of Data5 ;
+
+If Close of Data3 > SMA1_1H and SMA1_Slope_1H > 0 Then Low_Cycle_15M = Close of Data4 ;
+If Close of Data4 < Low_Cycle_15M Then Low_Cycle_15M = Close of Data4 ;
+If Close of Data3 < SMA1_1H and SMA1_Slope_1H < 0 Then High_Cycle_15M = Close of Data4 ;
+If Close of Data4 > High_Cycle_15M Then High_Cycle_15M = Close of Data4 ;
+
+If Close of Data2 > SMA1_D and SMA1_Slope_D > 0 Then Low_Cycle_1H = Close of Data3 ;
+If Close of Data3 < Low_Cycle_1H Then Low_Cycle_1H = Close of Data3 ;
+If Close of Data2 < SMA1_D and SMA1_Slope_D < 0 Then High_Cycle_1H = Close of Data3 ;
+If Close of Data3 > High_Cycle_1H Then High_Cycle_1H = Close of Data3 ;
+
+{ ============================================
+  SECTION 14: DYNAMIC DISTANCE CALCULATION
+  ============================================ }
+
+{ Calculate Dynamic Buyable max distance }
+Ratio_GainFromLow = (Close - Low_RecentDay) / (Range_RecentDay + 0.000000001) ;
+If Ratio_GainFromLow < Threshold_MaxRangeRatio
+Then Limit_MaxDistSMA12_Dynamic = (1 + (Threshold_MaxRangeRatio - Ratio_GainFromLow) / Threshold_MaxRangeRatio) * Limit_MaxDistSMA12_1M
+Else Limit_MaxDistSMA12_Dynamic = Limit_MaxDistSMA12_1M ;
+
+{ ============================================
+  SECTION 15: PHASE DETECTION
+  ============================================ }
+
+{ Calculate Daily, 1-Hour, 15-Minute, 5-Minute Bull & Bear Phase }
+IsBullPhase_D = (Close > SMA1_D_Cur and Close > SMA2_D_Cur and (SMA1_Slope_D_Cur > 0 or SMA2_Slope_D_Cur > 0))
+				or (Close > SMA2_D_Cur and SMA1_Slope_D_Cur > 0 and SMA2_Slope_D_Cur > 0) ;
+IsStrongBull_D = Close > SMA1_D_Cur and Close > SMA2_D_Cur
+				and SMA1_Slope_D_Cur > 0 and SMA2_Slope_D_Cur > 0 ;
+
+IsBullPhase_1H = (Close > SMA1_1H_Cur and Close > SMA2_1H_Cur and (SMA1_Slope_1H_Cur > 0 or SMA2_Slope_1H_Cur > 0))
+				or (Close > SMA2_1H_Cur and SMA1_Slope_1H_Cur > 0 and SMA2_Slope_1H_Cur > 0) ;
+IsStrongBull_1H = Close > SMA1_1H_Cur and Close > SMA2_1H_Cur
+				and SMA1_Slope_1H_Cur > 0 and SMA2_Slope_1H_Cur > 0 ;
+
+IsBullPhase_15M = (Close > SMA1_15M_Cur and Close > SMA2_15M_Cur and (SMA1_Slope_15M_Cur > 0 or SMA2_Slope_15M_Cur > 0))
+				or (Close > SMA2_15M_Cur and SMA1_Slope_15M_Cur > 0 and SMA2_Slope_15M_Cur > 0) ;
+IsStrongBull_15M = Close > SMA1_15M_Cur and Close > SMA2_15M_Cur
+				and SMA1_Slope_15M_Cur > 0 and SMA2_Slope_15M_Cur > 0 ;
+
+IsBullPhase_5M = (Close > SMA1_5M_Cur and Close > SMA2_5M_Cur and (SMA1_Slope_5M_Cur > 0 or SMA2_Slope_5M_Cur > 0))
+				or (Close > SMA2_5M_Cur and SMA1_Slope_5M_Cur > 0 and SMA2_Slope_5M_Cur > 0) ;
+IsStrongBull_5M = Close > SMA1_5M_Cur and Close > SMA2_5M_Cur
+				and SMA1_Slope_5M_Cur > 0 and SMA2_Slope_5M_Cur > 0 ;
+
+IsStrongBull_Multi = IsBullPhase_D and IsBullPhase_1H ;
+
+IsBearPhase_D = (Close < SMA1_D_Cur and Close < SMA2_D_Cur and (SMA1_Slope_D_Cur < 0 or SMA2_Slope_D_Cur < 0))
+				or (Close < SMA2_D_Cur and SMA1_Slope_D_Cur < 0 and SMA2_Slope_D_Cur < 0) ;
+IsStrongBear_D = Close < SMA1_D_Cur and Close < SMA2_D_Cur
+				and SMA1_Slope_D_Cur < 0 and SMA2_Slope_D_Cur < 0 ;
+
+IsBearPhase_1H = (Close < SMA1_1H_Cur and Close < SMA2_1H_Cur and (SMA1_Slope_1H_Cur < 0 or SMA2_Slope_1H_Cur < 0))
+				or (Close < SMA2_1H_Cur and SMA1_Slope_1H_Cur < 0 and SMA2_Slope_1H_Cur < 0) ;
+IsStrongBear_1H = Close < SMA1_1H_Cur and Close < SMA2_1H_Cur
+				and SMA1_Slope_1H_Cur < 0 and SMA2_Slope_1H_Cur < 0 ;
+
+IsBearPhase_15M = (Close < SMA1_15M_Cur and Close < SMA2_15M_Cur and (SMA1_Slope_15M_Cur < 0 or SMA2_Slope_15M_Cur < 0))
+				or (Close < SMA2_15M_Cur and SMA1_Slope_15M_Cur < 0 and SMA2_Slope_15M_Cur < 0) ;
+IsStrongBear_15M = Close < SMA1_15M_Cur and Close < SMA2_15M_Cur
+				and SMA1_Slope_15M_Cur < 0 and SMA2_Slope_15M_Cur < 0 ;
+
+IsBearPhase_5M = (Close < SMA1_5M_Cur and Close < SMA2_5M_Cur and (SMA1_Slope_5M_Cur < 0 or SMA2_Slope_5M_Cur < 0))
+				or (Close < SMA2_5M_Cur and SMA1_Slope_5M_Cur < 0 and SMA2_Slope_5M_Cur < 0) ;
+IsStrongBear_5M = Close < SMA1_5M_Cur and Close < SMA2_5M_Cur
+				and SMA1_Slope_5M_Cur < 0 and SMA2_Slope_5M_Cur < 0 ;
+
+IsStrongBear_Multi = IsBearPhase_D and IsBearPhase_1H ;
+
+IsBullPhaseSMA3 = SMA3_SlopeROC_1M > SMA3_SlopeROC_1M[1] or SMA3_SlopeROC_1M > 0 ;
+IsBearPhaseSMA3 = SMA3_SlopeROC_1M < SMA3_SlopeROC_1M[1] or SMA3_SlopeROC_1M < 0 ;
+
+{ ============================================
+  SECTION 16: LONG/SHORT PERMISSION LOGIC
+  ============================================ }
+
+{ Decide Long or Short are allowed }
+Can_GoLong = False;
+Can_GoShort = False;
+If IsStrongBull_Multi then
+Begin
+	Can_GoLong = True;
+	Can_GoShort = False;
+End
+Else If IsStrongBear_Multi then
+Begin
+	Can_GoLong = False;
+	Can_GoShort = True;
+End
+Else
+Begin
+	If IsBullPhase_1H or (Close > SMA1_1H_Cur and SMA1_Slope_1H_Cur > 0) or (Close > SMA2_1H_Cur and SMA2_Slope_1H_Cur > 0) Then Can_GoLong = True
+	Else If IsBullPhase_D or (Close > SMA1_D_Cur and SMA1_Slope_D_Cur > 0)
+			or (Close > SMA2_D_Cur and SMA2_Slope_D_Cur > 0)
+	Then
+	Begin
+		Is_D_BullSlope1_1H = Close > SMA1_1H_Cur and SMA1_Slope_1H_Cur > -15 and SMA1_SlopeROC_1H > SMA1_SlopeROC_1H[1] and SMA1_SlopeROC_1H > 0 ;
+		Is_D_BullSlope2_1H = Close > SMA2_1H_Cur and SMA2_Slope_1H_Cur > -15 and SMA2_SlopeROC_1H > SMA2_SlopeROC_1H[1] and SMA2_SlopeROC_1H > 0 ;
+		Is_D_BullSlope12_1H = Is_D_BullSlope1_1H or Is_D_BullSlope2_1H ;
+		If Is_D_BullSlope12_1H Then Can_GoLong = True
+		Else
+		Begin
+			If IsBullPhase_15M Then Can_GoLong = True
+			Else
+			Begin
+				Low_Min_15M = LowestFC(Low of Data4, 4);
+				Limit_MaxGain_15M = (HighestFC(High of Data4, 4) - Low_Min_15M) * Threshold_MaxRangeRatio ;
+				Count_AboveSMA1_15M = CountIf(((Close of Data4 + High of Data4 * Threshold_MaxRangeRatio + Low of Data4 * (1 - Threshold_MaxRangeRatio)) * 0.5 > SMA1_15M)
+					and (Close of Data4 >= Open of Data4 or Close of Data4 > SMA1_15M), 4) ;
+				Count_AboveSMA2_15M = CountIf(((Close of Data4 + High of Data4 * Threshold_MaxRangeRatio + Low of Data4 * (1 - Threshold_MaxRangeRatio)) * 0.5 > SMA2_15M)
+					and (Close of Data4 >= Open of Data4 or Close of Data4 > SMA2_15M), 4) ;
+				If	(
+						(Close > SMA1_15M_Cur and SMA1_Slope_15M_Cur > 0)	
+						and (Limit_MaxGain_15M > SMA1_15M_Cur - Low_Min_15M or Count_AboveSMA1_15M > 2)
+					)
+					or
+					( 
+						(Close > SMA2_15M_Cur and SMA2_Slope_15M_Cur > 0)	
+						and (Limit_MaxGain_15M > SMA2_15M_Cur - Low_Min_15M or Count_AboveSMA2_15M > 2)
+					)
+				Then Can_GoLong = True ;
+			End;
+		End;
+	End;	
+
+	If IsBearPhase_1H or (Close < SMA1_1H_Cur and SMA1_Slope_1H_Cur < 0) or (Close < SMA2_1H_Cur and SMA2_Slope_1H_Cur < 0) Then Can_GoShort = True
+	Else If IsBearPhase_D or (Close < SMA1_D_Cur and SMA1_Slope_D_Cur < 0)
+			or (Close < SMA2_D_Cur and SMA2_Slope_D_Cur < 0)
+	Then
+	Begin
+		Is_D_BearSlope1_1H = Close < SMA1_1H_Cur and SMA1_Slope_1H_Cur < 15 and SMA1_SlopeROC_1H < SMA1_SlopeROC_1H[1] and SMA1_SlopeROC_1H < 0 ;
+		Is_D_BearSlope2_1H = Close < SMA2_1H_Cur and SMA2_Slope_1H_Cur < 15 and SMA2_SlopeROC_1H < SMA2_SlopeROC_1H[1] and SMA2_SlopeROC_1H < 0 ;
+		Is_D_BearSlope12_1H = Is_D_BearSlope1_1H or Is_D_BearSlope2_1H ;
+		If Is_D_BearSlope12_1H Then Can_GoShort = True
+		Else
+		Begin
+			If IsBearPhase_15M Then Can_GoShort = True
+			Else
+			Begin
+				High_Max_15M = HighestFC(High of Data4, 4);
+				Limit_MaxDrop_15M = (High_Max_15M - LowestFC(Low of Data4, 4)) * Threshold_MaxRangeRatio ;
+				Count_UnderSMA1_15M = CountIf(((Close of Data4 + Low of Data4 * Threshold_MaxRangeRatio + High of Data4 * (1 - Threshold_MaxRangeRatio)) * 0.5 < SMA1_15M)
+					and (Close of Data4 < Open of Data4 or Close of Data4 < SMA1_15M), 4) ;
+				Count_UnderSMA2_15M = CountIf(((Close of Data4 + Low of Data4 * Threshold_MaxRangeRatio + High of Data4 * (1 - Threshold_MaxRangeRatio)) * 0.5 < SMA2_15M)
+					and (Close of Data4 < Open of Data4 or Close of Data4 < SMA2_15M), 4) ;
+				If	(
+						(Close < SMA1_15M_Cur and SMA1_Slope_15M_Cur < 0)	
+						and (Limit_MaxDrop_15M > High_Max_15M - SMA1_15M_Cur or Count_UnderSMA1_15M > 2)
+					)
+					or
+					( 
+						(Close > SMA2_15M_Cur and SMA2_Slope_15M_Cur > 0)	
+						and (Limit_MaxDrop_15M > High_Max_15M - SMA2_15M_Cur or Count_UnderSMA2_15M > 2)
+					)
+				Then Can_GoShort = True ;
+			End;		
+		End;
+	End;
+End;
+
+If IsBullPhase_D = False
+	and Count_AboveSMA1_1H <= 3
+	and Count_AboveSMA2_1H <= 3
+	and SMASupports[2,1] = 0
+	and SMASupports[2,2] = 0
+Then
+Begin
+	For Loop_SMA = 1 to 4
+	Begin
+		For Loop_Timeframe = 1 to 3
+		Begin
+			SMASupports[Loop_Timeframe, Loop_SMA] = 0 ;
+		End;
+	End ; 
+	Max_SMASupports = 0 ;				
+End ;
+
+{ ============================================
+  SECTION 17: CONDITION FLAGS
+  ============================================ }
+
+{ Calculate 15-Minute Oversold Support }
+If SMI_Value_15M_Cur < -40
+	and ((SMI_Value_15M_Cur > SMI_Value_15M and BarStatus(4) <> 2) or (SMI_Value_15M > SMI_Value_15M[1] and BarStatus(4) = 2))
+	and Stoch_SlowK_15M_Cur < Threshold_Stoch_OS 
+	and ((Stoch_SlowK_15M_Cur > Stoch_SlowK_15M and BarStatus(4) <> 2) or (Stoch_SlowK_15M > Stoch_SlowK_15M[1] and BarStatus(4) = 2))
+	and Range_RecentDay / (Low_RecentDay + 0.000000001) > Threshold_DayDeclinePct
+	and Close - Low_RecentDay < Range_RecentDay * Threshold_MaxRangeRatio
+Then Has_OSSupport_15M = True
+Else Has_OSSupport_15M = False ;
+
+{ Calculate Daily & 1-Hour Quick Oversold Support }
+If IsStrongBull_D
+	and Stoch_SlowK_1H_Cur < Threshold_Stoch_OS
+	and SMI_Value_1H_Cur < 0
+	and (SMI_Value_1H_Cur < -40 or SMI_Value_15M_Cur < -40 or SMI_Value_15M < -40 or (CurrentBar of Data4 = Num_SMICrossUp_15M and SMI_Value_15M < -30)) 
+	and Range_RecentDay / (Low_RecentDay + 0.000000001) > Threshold_DayDeclinePct
+	and Close - Low_RecentDay < Range_RecentDay * Threshold_MaxRangeRatio
+	and (
+		(Close < SMASupports[1, 1] and Close - SMA1_D_Cur < Limit_MaxDist_D * 0.5)
+		or (Close < SMASupports[2, 1] and Close - SMA1_1H_Cur < Limit_MaxDist_1H * 0.5)
+		or (Close < SMASupports[2, 2] and Close - SMA2_1H_Cur < Limit_MaxDist_1H * 0.5)
+		or (Close < SMASupports[2, 3] and Close - SMA3_1H_Cur < Limit_MaxDist_1H * 0.5)
+		or (Close < SMASupports[2, 4] and Close - SMA4_1H_Cur < Limit_MaxDist_1H * 0.5)
+	)
+	and CloseD(1) < CloseD(2)
+	and Close < CloseD(1)
+Then Has_QuickOS_1H = True
+Else Has_QuickOS_1H = False ;
+
+{ Calculate 15-Minute Bullish Reversal on 1-Hour SMA1 }
+If	(
+		Close > SMA1_1H_Cur
+		and (SMA1_Slope_1H_Cur > 0 or Is_D_BullSlope1_1H)
+		and (Close < SMASupports[2, 1] and Close - SMA1_1H_Cur < Limit_MaxDist_1H)
+	)
+	and SMI_Value_15M_Cur < 15
+	and CurrentBar of Data4 - Num_KDCrossUp_15M <= 1
+	and Stoch_SlowK_15M < Threshold_Stoch_OS
+Then Has_BullReversal_15M = True
+Else Has_BullReversal_15M = False ;
+
+{ ============================================
+  SECTION 18: LONG ENTRY LOGIC
+  ============================================ }
+
+{ If Long is enabled, go ahead }
+If Input_AllowLong Then
+Begin
+
+{ Calculate Higher Time Frame Long Status }
+Is_SMIBullish_15M = False ; 
+If BarStatus(4) <> 2 Then
+Begin
+	If IsBearPhase_15M Then
+	Begin
+		If SMI_Value_15M_Cur > SMI_Value_15M and SMI_Value_15M > SMI_Value_15M[1] and SMI_Value_15M[1] > SMI_Value_15M[2]
+		Then Is_SMIBullish_15M = True ;
+	End
+	Else If Close > SMA1_15M_Cur Then
+	Begin
+		If (SMI_Value_15M_Cur > SMI_Value_15M) and (SMI_Value_15M > SMI_Value_15M[1] or SMI_Value_5M > SMI_Value_5M[1])
+		Then Is_SMIBullish_15M = True ;
+	End
+	Else If SMI_Value_15M_Cur > SMI_Value_15M and SMI_Value_15M > SMI_Value_15M[1] Then Is_SMIBullish_15M = True ;
+End
+Else If BarStatus(4) = 2 Then
+Begin
+	If IsBearPhase_15M Then
+	Begin
+		If SMI_Value_15M > SMI_Value_15M[1] and SMI_Value_15M[1] > SMI_Value_15M[2] Then Is_SMIBullish_15M = True ;
+	End
+	Else If SMI_Value_15M > SMI_Value_15M[1] Then Is_SMIBullish_15M = True ;
+End ;
+
+If SMA1_1H_Cur > SMA2_1H_Cur
+	and Close > SMA2_1H_Cur
+	and Close < SMA1_1H_Cur
+	and SMA1_Slope_1H < 0
+Then Has_SMA12Sandwich_1H = True
+Else Has_SMA12Sandwich_1H = False ;
+
+If (Close > SMA1_1H_Cur and Close - SMA1_1H_Cur < Limit_MaxDist_1H) or Close < SMA1_1H_Cur
+Then Is_SMA1DistOK_1H = True
+Else Is_SMA1DistOK_1H = False ;
+
+If Close of Data3 < Close[1] of Data3 and Close[1] of Data3 < Close[2] of Data3 and Close[2] of Data3 < Close[3] of Data3 Then Has_ConsecDown_1H = True ;
+If Stoch_SlowK_1H < Threshold_Stoch_OS or Stoch_SlowK_1H > Stoch_SlowD_1H Then Has_ConsecDown_1H = False ;
+
+Can_EntryLong_HTF = Stoch_SlowK_1H_Cur < Threshold_Stoch_OB
+		and Has_ConsecDown_1H = False
+		and Is_SMA1DistOK_1H
+		and Has_SMA12Sandwich_1H = False
+		and (
+			((SMI_Value_1H_Cur > SMI_Value_1H and BarStatus(3) <> 2) or (SMI_Value_1H > SMI_Value_1H[1] and BarStatus(3) = 2)) 
+			or Stoch_SlowK_1H_Cur < 50
+			or Stoch_SlowK_1H_Cur > Stoch_SlowD_1H_Cur
+		)
+		and SMI_Value_1H_Cur < 40
+		and (SMI_Value_15M_Cur < 40 or SMI_Value_1H_Cur < 0)
+		and (
+			Is_SMIBullish_15M 
+			or Has_BullReversal_15M
+			or (
+				SMI_Value_15M_Cur < -15
+				and (
+					IsBearPhase_15M = False
+					and ((Stoch_SlowK_15M_Cur > Stoch_SlowK_15M and BarStatus(4) <> 2) or (Stoch_SlowK_15M > Stoch_SlowK_15M[1] and BarStatus(4) = 2))
+					and (Stoch_SlowK_15M_Cur < Threshold_Stoch_OS or Stoch_SlowK_15M_Cur > Stoch_SlowD_15M_Cur) 
+					and Stoch_SlowK_15M < Threshold_Stoch_OS
+					and ((SMI_Value_5M_Cur > SMI_Value_5M and BarStatus(5) <> 2) or (SMI_Value_5M > SMI_Value_5M[1] and BarStatus(5) = 2))
+					and Close > SMA1_5M_Cur
+					and SMA1_Slope_5M_Cur > 0
+				)
+			)
+			or (
+				SMA1_Slope_15M_Cur > 0
+				and SMA1_15M_Cur > SMA2_15M_Cur
+				and Close > SMA1_15M_Cur
+				and SMI_Value_5M < 40
+				and (SMI_Value_5M > SMI_Value_5M[1] and SMI_Value_5M[1] > SMI_Value_5M[2] and SMI_Value_5M[2] > SMI_Value_5M[3])
+			)
+		)
+		and (
+			(Stoch_SlowK_15M_Cur < Threshold_Stoch_OB and (Stoch_SlowK_15M < Threshold_Stoch_OB or Stoch_SlowK_15M_Cur > Stoch_SlowD_15M_Cur))
+			or SMI_Value_15M < 0
+		) ;
+
+{ Is it 1-Hour or Daily Tight Support? }
+Has_TightSupport_1H = (Close < SMASupports[2, 1] and Close - SMA1_1H_Cur < Limit_MaxDistSMA12_1M)
+			or (Close < SMASupports[2, 2] and Close - SMA2_1H_Cur < Limit_MaxDistSMA12_1M)
+			or (Close < SMASupports[2, 3] and Close - SMA3_1H_Cur < Limit_MaxDistSMA12_1M)
+			or (Close < SMASupports[2, 4] and Close - SMA4_1H_Cur < Limit_MaxDistSMA12_1M) ;
+Has_TightSupport_D = Close < SMASupports[1, 1] and Close - SMA1_D_Cur < Limit_MaxDistSMA12_Dynamic ;
+
+{ ============================================
+  SECTION 19: MULTIPLE TIMEFRAME BUYING
+  ============================================ }
+
+{ Check for 1-Minute buying condition }
+If SMA4_1M - SMA1_1M > Limit_MinDevSMA14_1M
+	and SMA1_Slope_1M > 0
+	and Close >= SMA1_1M
+Then
+Begin
+	If Flag_PrintSMA14Dev Then
+	Begin
+		If CurrentBar - Num_PrevTextBar < 6 Then value1 = Text_SetStyle(ID_PrevText, 1, 1) ;
+		ID_TrendLine = TL_New(Date, Time, High * 1.002, Date, Time, High * 1.008) ;
+		ID_Text = Text_New(Date, Time, High * 1.008, "1M" + NumToStr((SMA4_1M - SMA1_1M) / SMA1_1M * 100, 1)) ;
+		ID_PrevText = ID_Text ;
+		Num_PrevTextBar = CurrentBar ;
+		value1 = Text_SetColor(ID_Text, Green) ;
+		value1 = Text_SetStyle(ID_Text, 1, 0) ;
+		Flag_PrintSMA14Dev = False ;
+	End;
+	Has_BullishClose = Low > Low[1] or High > High[1] or Close > Close[1] ;
+	If Has_BullishClose
+		and (IsBearPhase_D = False
+			or (IsBearPhase_D and Stoch_SlowK_D < Threshold_Stoch_OS)
+			or (IsBearPhase_D and Stoch_SlowK_D < Threshold_Stoch_Neutral and Stoch_SlowK_D > Stoch_SlowD_D)
+			)
+		and (IsBearPhase_1H = False
+			or (IsBearPhase_1H and Stoch_SlowK_1H < Threshold_Stoch_OS)
+			or (IsBearPhase_1H and Stoch_SlowK_1H < Threshold_Stoch_Neutral and Stoch_SlowK_1H > Stoch_SlowD_1H)
+			)
+		and (IsBearPhase_15M = False
+			or (IsBearPhase_15M and Stoch_SlowK_15M < Threshold_Stoch_OS)
+			or (IsBearPhase_15M and Stoch_SlowK_15M < Threshold_Stoch_Neutral and Stoch_SlowK_15M > Stoch_SlowD_15M)
+			)
+		and (IsBearPhase_5M = False
+			or (IsBearPhase_5M
+				and SMI_Value_5M > SMI_Value_5M[1] and (SMI_Value_5M < Threshold_SMI_OS or Num_StochOSCrossUp_5M - Currentbar of Data5 <= 1)
+				and Stoch_SlowK_5M > Stoch_SlowD_5M and Stoch_SlowK_5M > Threshold_Stoch_OS
+				)
+			)			
+		and (SMA1_SlopeROC_1M > SMA1_SlopeROC_1M[1] or SMA1_SlopeROC_1M > 0)
+		and Stoch_SlowK_1M > Stoch_SlowD_1M
+		and (Volatility_Pct > Threshold_VolPctMin
+			or (Close >= SMA2_1M and Volatility_Pct <= Threshold_VolPctMin))
+		and Close - SMA1_1M < Limit_CloseSMA1_1M
+		and (Close - Minlist(Low_Recent, Low_Cycle_1M)) / (SMA4_1M - Minlist(Low_Recent, Low_Cycle_1M)) < Threshold_RangeRatio
+		and (SMI_Value_1M < Threshold_SMI_OB or Stoch_SlowK_1M < Threshold_Stoch_OB or Volatility_Pct <= Threshold_VolPctMin) 
+	Then
+	Begin
+		Entry_Technical = 1 ;
+		Entry_Timeframe = 0 ;
+		print(IM, Volatility_Pct) ;
+	End;
+End
+Else If Close < SMA1_1M Then Flag_PrintSMA14Dev = True ;
+
+{ ============================================
+  SECTION 20: END OF MULTIPLE TIMEFRAME BUYING
+  ============================================ }
+
+{ The following calculate buy orders based on Bullish setup only }
+If (
+	Can_GoLong
+	and Can_EntryLong_HTF
+	and (
+		(Max_SMASupports > 0 and Close < Max_SMASupports)
+		or Has_OSSupport_15M
+	)
+	and IsBullPhaseSMA3
+)
+	or Has_QuickOS_1H 
+Then	
+Begin
+	{ Buy on straight up day at extreme oversold }
+	If Chaikin_Value > 0
+		and Stoch_SlowK_D_Cur < Threshold_Stoch_OS
+		and (CurrentBar of Data3 - Num_SMICrossUp_1H <= 1 or (SMI_Value_1H_Cur > -40 and SMI_Value_1H < -40))
+		and SMI_Value_1H_Cur < -30		 
+		and Volume_1H > Volume_Avg_1H * 1.2
+		and Close < Maxlist(SMASupports[1, 1], SMASupports[1, 2], SMASupports[1, 3], SMASupports[1, 4])
+		and Close > SMA1_1H_Cur
+		and Close > Close of data3
+	Then Entry_Technical = 3 ;
+End;
+
+{ Buy orders based on Daily Strong Bullish setup only }
+If IsStrongBull_D
+	and IsStrongBear_1H = False
+	and Max_SMASupports > 0
+	and Close < Max_SMASupports
+Then	
+Begin
+	{ Buy on gaps down to support }
+	If TimeToMinutes(Time) - TimeToMinutes(SessionStartTime(0,1)) <= Threshold_GapMinutes and Close < CloseD(1) * (1 - Threshold_GapDownPct) then Has_GapDown = (True);
+	If TimeToMinutes(Time) - TimeToMinutes(SessionStartTime(0,1)) > Threshold_GapMinutes Then Has_GapDown = False;
+	If Has_GapDown
+		and Close > Close[1]
+		and Stoch_SlowK_1H < Threshold_Stoch_OS
+		and Stoch_SlowK_15M < Threshold_Stoch_OS	
+		and SMI_Value_1H < 40
+		and SMI_Value_15M < 0 
+		and Close < Minlist(SMA1_1M, SMA2_1M, SMA3_1M, SMA4_1M)
+		and SMA1_1M - Close > Limit_MaxGainFromLow
+	Then Entry_GapDown = 1 ;
+End;
+
+{ End of Day Buy Rule #1: Must buy when IsStrongBull_Multi is true }
+If IsStrongBull_Multi
+	and SMA1_Slope_D_Cur > 0
+	and SMA1_Slope_1H_Cur > 0
+	and SMA1_SlopeMA_1H > 0
+	and Stoch_SlowK_1H_Cur < 80
+	and Close - SMA1_1H_Cur < Limit_MaxDistSMA34_1M
+Then
+Begin
+	If TimeToMinutes(SessionEndTime(0,1)) - TimeToMinutes(Time) = 1
+	Then Entry_EOD_HoldRule = 1
+	Else
+	If TimeToMinutes(SessionEndTime(0,1)) - TimeToMinutes(Time) < 15
+		and (SMA2_SlopeROC_1M > SMA2_SlopeROC_1M[1] or SMA2_SlopeROC_1M > 0)
+		and SMA3_SlopeROC_1M > SMA3_SlopeROC_1M[1]
+		and SMA4_SlopeROC_1M > SMA4_SlopeROC_1M[1]
+		and Close >= Close[1]
+		and Flag_NoEODBuy = False
+	Then
+	Begin
+		Entry_EOD_HoldRule = 1;
+		Flag_NoEODBuy = True;
+	End;
+End;
+If TimeToMinutes(SessionEndTime(0,1)) - TimeToMinutes(Time) = 1
+Then Flag_NoEODBuy = False ;
+
+{ End of Day Buy Rule #2: Unfinished code }
+{ Per case GDXJ 6/2/2016 }
+
+End;
+
+{ ============================================
+  SECTION 21: RESET & ORDER EXECUTION
+  ============================================ }
+
+{ Reset Open/High/Low at bar close }
+If BarStatus(3) = 2 Then Open_1H = -1 ;
+If BarStatus(4) = 2 Then Open_15M = -1 ;
+If BarStatus(5) = 2 Then Open_5M = -1 ;
+
+{ Order Execution }
+If Time <> SessionEndTime(0,1) Then
+Begin
+	If Entry_Technical > 0 Then
+	Begin
+		If Flag_EntryControl = 0 Then
+		Begin
+			If Entry_Timeframe > 0 Then Flag_EntryControl = 1 ;
+			Buy ("T" + NumToStr(Entry_Technical, 0) + "-" + NumToStr(Entry_Timeframe, 0)) next bar at market;
+			Sell ("TS" + NumToStr(Entry_Technical, 0)) next bar at market;
+		End ;
+		Entry_Technical = 0;
+	End
+	Else Flag_EntryControl = 0 ;
+	
+	If Entry_EOD_HoldRule > 0 Then
+	Begin
+		Buy ("H" + NumToStr(Entry_EOD_HoldRule, 0)) next bar at market;
+		Sell ("HS" + NumToStr(Entry_EOD_HoldRule, 0)) next bar at market;
+	End;
+	Entry_EOD_HoldRule = 0;
+	
+	If Entry_GapDown > 0 Then
+	Begin
+		Buy ("G" + NumToStr(Entry_GapDown, 0)) next bar at market;
+		Sell ("GS" + NumToStr(Entry_GapDown, 0)) next bar at market;
+	End;
+	Entry_GapDown = 0;
+End
+Else
+Begin
+	Entry_Technical = 0;
+	Entry_EOD_HoldRule = 0;
+	Entry_GapDown = 0;
+End;	
+
+End;
+
+{ For debugging - adjust date/time or comment to disable }
+{ Okp = debug(1161230, 1430, ok, okp); }
