@@ -1,0 +1,546 @@
+{ ================================================
+  INDICATOR: MyPullbackCounter
+  Project Morpheus - ATR Band Pullback Tracking
+  ================================================ 
+  
+  PURPOSE:
+  Tracks and counts pullbacks to ATR-based bands around
+  reference MA (SMA1 or SMA2) with impulse detection,
+  stochastic filtering, and price breakout gating.
+  
+  TIMEFRAME-AGNOSTIC:
+  Works on any chart interval - 1min, 5min, 15min, 1H, Daily, etc.
+  
+  FEATURES:
+  - ATR-based dynamic bands
+  - Impulse move detection before pullback
+  - Stochastic cycle gating
+  - Price leg breakout confirmation
+  - Minimum bar separation between pullbacks
+  - Comprehensive debug system with multiple levels
+  
+  PLOTS:
+  - Plot1: Band_Upper (upper ATR band)
+  - Plot2: Band_Lower (lower ATR band)
+  
+  ANNOTATIONS:
+  - Text labels at pullback points (e.g., "21P1", "50P2")
+  ================================================ }
+
+Inputs:
+	{ Strategy Parameters }
+	Len_SMA1(21),                      { SMA1 length }
+	Len_SMA2(50),                      { SMA2 length }
+	Input_RefSMA(1),                   { 1 = SMA1, 2 = SMA2 }
+	
+	Len_ATR(14),                       { ATR for band calculation }
+	Coeff_BandWidth(0.50),             { Band half-width = Coeff * ATR }
+	Coeff_ImpulseThreshold(1.00),      { Impulse distance from MA }
+	
+	Threshold_MinBarsSeparation(9),    { Minimum bars between pullbacks }
+	
+	Input_UseStochFilter(True),        { Use slow stochastic filter }
+	Len_Stoch(14),
+	
+	Input_ShowPlots(True),             { Show BandUpper/BandLower plots }
+	
+	{ Debug System Controls }
+	Input_EnableDebug(False),                                    { Master debug switch }
+	Input_DebugStartDate(1251126),                               { YYYMMDD format }
+	Input_DebugStartTime(1300),                                  { HHMM format }
+	Input_DebugEndDate(1251128),
+	Input_DebugEndTime(1600),
+	Input_DebugFilePath("D:\MyPullbackCounter_Debug.csv"),       { CSV output file }
+	Input_DebugVerbosity(2),                                     { 0=Off, 1=Events Only, 2=Normal, 3=Verbose }
+	Input_DebugCondition(0) ;                                    { 0=All, 1=Failed PB, 2=Stoch Issues, 3=Price Gate Issues }
+
+Variables:
+	{ Moving Averages }
+	SMA1(0), SMA2(0),
+	SMA_Reference(0),
+	
+	{ Slope & Trend }
+	SMA1_Slope3Bar(0), SMA2_Slope3Bar(0),
+	Trend(0), Trend_Previous(0),
+	
+	{ ATR Band }
+	ATR_Value(0),
+	Band_Upper(0), Band_Lower(0),
+	
+	{ Pullback Tracking }
+	Count_Pullback(0),
+	Num_BarsSincePB(0),
+	Flag_ImpulseDetected(False),
+	Flag_TouchedBand(False),
+	Can_CountPullback(False),
+	
+	{ Stochastic }
+	Stoch_FastK(0), Stoch_FastD(0),
+	Stoch_SlowK(0), Stoch_SlowD(0),
+	Temp_Return(0),
+	
+	{ Gating Flags }
+	Flag_StochReady(False),
+	Flag_PriceReady(False),
+	Price_LastPBHigh(0),               { Highest close in current up leg }
+	Price_LastPBLow(0),                { Lowest close in current down leg }
+	
+	{ Text Labels }
+	Text_MAId(""),
+	Text_Value(""),
+	Offset_Text(0),
+	ID_Text(0),
+	
+	{ Breakout Detection }
+	Flag_BreakoutUp(False),
+	Flag_BreakoutDown(False),
+	
+	{ Debug System Variables }
+	Flag_InDebugWindow(False),
+	Flag_DebugHeaderWritten(False),
+	Flag_LogThisBar(False),
+	Text_DebugLine(""),
+	Text_EventType("");
+
+{ ============================================
+  SECTION 1: MOVING AVERAGES
+  ============================================ }
+
+SMA1 = Average(Close, Len_SMA1) ;
+SMA2 = Average(Close, Len_SMA2) ;
+
+{ 3-bar slope calculation }
+SMA1_Slope3Bar = SMA1 - SMA1[3] ;
+SMA2_Slope3Bar = SMA2 - SMA2[3] ;
+
+{ ============================================
+  SECTION 2: REFERENCE MA SELECTION
+  ============================================ }
+
+If Input_RefSMA = 1 Then
+Begin
+	SMA_Reference = SMA1 ;
+	Text_MAId = NumToStr(Len_SMA1, 0) ;
+End
+Else
+Begin
+	SMA_Reference = SMA2 ;
+	Text_MAId = NumToStr(Len_SMA2, 0) ;
+End ;
+
+{ ============================================
+  SECTION 3: TREND DETECTION
+  ============================================ }
+
+If (SMA1 > SMA2) and (SMA1_Slope3Bar > 0 or SMA2_Slope3Bar > 0) Then
+	Trend = 1
+Else If (SMA1 < SMA2) and (SMA1_Slope3Bar < 0 or SMA2_Slope3Bar < 0) Then
+	Trend = -1
+Else
+	Trend = 0 ;
+
+{ ============================================
+  SECTION 4: ATR BAND CALCULATION
+  ============================================ }
+
+ATR_Value = AvgTrueRange(Len_ATR) ;
+Band_Upper = SMA_Reference + Coeff_BandWidth * ATR_Value ;
+Band_Lower = SMA_Reference - Coeff_BandWidth * ATR_Value ;
+
+{ ============================================
+  SECTION 5: RESET ON FIRST BAR OR TREND FLIP
+  ============================================ }
+
+If CurrentBar = 1 Then
+Begin
+	Trend_Previous = Trend ;
+	Count_Pullback = 0 ;
+	Num_BarsSincePB = 0 ;
+	Flag_ImpulseDetected = False ;
+	Flag_StochReady = True ;           { PB1 allowed }
+	Flag_PriceReady = True ;           { PB1 allowed - no leg gating yet }
+	Price_LastPBHigh = Close ;         { Seed leg anchors }
+	Price_LastPBLow = Close ;
+End
+Else If Trend <> Trend_Previous Then
+Begin
+	Count_Pullback = 0 ;
+	Num_BarsSincePB = 0 ;
+	Flag_ImpulseDetected = False ;
+	Flag_StochReady = False ;
+	Flag_PriceReady = True ;
+	Price_LastPBHigh = Close ;         { Start new leg from here }
+	Price_LastPBLow = Close ;
+End ;
+
+{ ============================================
+  SECTION 6: BREAKOUT DETECTION
+  ============================================ }
+
+{ Uptrend: breakout THROUGH upper band from below }
+Flag_BreakoutUp = (Close > Band_Upper) and (Close[1] <= Band_Upper) ;
+If Flag_BreakoutUp Then
+Begin
+	Flag_StochReady = False ;          { Require full stochastic cycle }
+	Num_BarsSincePB = 0 ;              { Need minimum bars before counting pullback }
+End ;
+
+{ Downtrend: breakout THROUGH lower band from above }
+Flag_BreakoutDown = (Close < Band_Lower) and (Close[1] >= Band_Lower) ;
+If Flag_BreakoutDown Then
+Begin 
+	Flag_StochReady = False ;          { Require full stochastic cycle }
+	Num_BarsSincePB = 0 ;              { Need minimum bars before counting pullback }
+End ;
+
+{ ============================================
+  SECTION 7: RESET ON BREAKOUT FAILURE
+  ============================================ }
+
+If Trend = -1 and Close > Band_Upper Then
+Begin
+	{ Bear breakout failure - price popped above band }
+	Count_Pullback = 0 ;
+	Num_BarsSincePB = 0 ;
+	Flag_StochReady = False ;          { Must see NEW SlowK cross after this }
+	Flag_PriceReady = True ;           { PB1 allowed once StochReady is re-armed }
+	Flag_ImpulseDetected = False ;
+	Price_LastPBHigh = Close ;         { Re-anchor leg extremes by close }
+	Price_LastPBLow = Close ;
+End
+Else If Trend = 1 and Close < Band_Lower Then
+Begin
+	{ Bull breakout failure - price dropped below band }
+	Count_Pullback = 0 ;
+	Num_BarsSincePB = 0 ;
+	Flag_StochReady = False ;
+	Flag_PriceReady = True ;
+	Flag_ImpulseDetected = False ;
+	Price_LastPBHigh = Close ;
+	Price_LastPBLow = Close ;
+End ;
+
+Num_BarsSincePB = Num_BarsSincePB + 1 ;
+
+{ ============================================
+  SECTION 8: STOCHASTIC CALCULATION & GATING
+  ============================================ }
+
+If Input_UseStochFilter Then
+Begin
+	Temp_Return = Stochastic(High, Low, Close,
+	                         Len_Stoch, 3, 3, 1,
+	                         Stoch_FastK, Stoch_FastD, Stoch_SlowK, Stoch_SlowD) ;
+	
+	{ Arm Flag_StochReady only when a new cross happens }
+	If Trend = -1 Then
+	Begin
+		{ Downtrend: SlowK cross above 20 }
+		If Stoch_SlowK[1] <= 20 and Stoch_SlowK > 20 Then
+			Flag_StochReady = True ;
+	End
+	Else If Trend = 1 Then
+	Begin
+		{ Uptrend: SlowK cross under 80 }
+		If Stoch_SlowK[1] >= 80 and Stoch_SlowK < 80 Then
+			Flag_StochReady = True ;
+	End ;
+End
+Else
+	Flag_StochReady = True ;
+
+{ ============================================
+  SECTION 9: LEG ANCHOR UPDATES & PRICE GATING
+  ============================================ }
+
+{ Uptrend - Track highest close in current leg }
+If Flag_BreakoutUp and (Count_Pullback = 0) Then
+	Price_LastPBHigh = Close
+Else If (Trend = 1) and (Count_Pullback = 0) and (Close > Price_LastPBHigh) Then
+	Price_LastPBHigh = Close
+{ For PB2, PB3,... gating: after a PB we reset Price_LastPBHigh to PB close,
+  then we consider a new leg confirmed only once Close breaks above it }
+Else If Trend = 1 Then
+Begin
+	If Close > Price_LastPBHigh Then
+	Begin
+		{ New highest close in current up leg }
+		Price_LastPBHigh = Close ;
+		Flag_PriceReady = True ;   { Allow next PB in this leg }
+	End ;
+End ;
+
+{ Downtrend - Track lowest close in current leg }
+If Flag_BreakoutDown and (Count_Pullback = 0) Then
+	Price_LastPBLow = Close
+Else If (Trend = -1) and (Count_Pullback = 0) and (Close < Price_LastPBLow) Then
+	Price_LastPBLow = Close
+{ For PB2, PB3,... gating in downtrend }
+Else If Trend = -1 Then
+Begin
+	If Close < Price_LastPBLow Then
+	Begin
+		{ New lowest close in current down leg }
+		Price_LastPBLow = Close ;
+		Flag_PriceReady = True ;
+	End ;
+End ;
+
+{ ============================================
+  SECTION 10: IMPULSE DETECTION
+  ============================================ }
+
+If Trend = 1 Then
+Begin
+	If Close > (SMA_Reference + Coeff_ImpulseThreshold * ATR_Value) Then
+		Flag_ImpulseDetected = True ;
+End
+Else If Trend = -1 Then
+Begin
+	If Close < (SMA_Reference - Coeff_ImpulseThreshold * ATR_Value) Then
+		Flag_ImpulseDetected = True ;
+End ;
+
+{ ============================================
+  SECTION 11: BAND TOUCH DETECTION
+  ============================================ }
+
+Flag_TouchedBand = (High >= Band_Lower) and (Low <= Band_Upper) ;
+
+{ ============================================
+  SECTION 12: PULLBACK CONDITIONS
+  ============================================ }
+
+Can_CountPullback = Flag_ImpulseDetected and
+                    (Num_BarsSincePB >= Threshold_MinBarsSeparation) and
+                    (Trend <> 0) and
+                    Flag_StochReady and
+                    Flag_PriceReady ;
+
+{ ============================================
+  SECTION 13: DEBUG SYSTEM - ENHANCED
+  ============================================ }
+
+If Input_EnableDebug Then
+Begin
+	{ Check if within debug time window }
+	Flag_InDebugWindow = (Date > Input_DebugStartDate or (Date = Input_DebugStartDate and Time >= Input_DebugStartTime))
+	                     and (Date < Input_DebugEndDate or (Date = Input_DebugEndDate and Time <= Input_DebugEndTime)) ;
+	
+	If Flag_InDebugWindow Then
+	Begin
+		{ Write CSV header on first bar in window }
+		If Flag_DebugHeaderWritten = False Then
+		Begin
+			FileAppend(Input_DebugFilePath,
+				"Date,Time,Close,SMA1,SMA2,RefMA,Trend,PBCount," +
+				"ATR,BandUp,BandDn,BarsSincePB," +
+				"Impulse,Touch,StochRDY,PriceRDY,Allow," +
+				"SlowK,SlowD,Slope3Bar," +
+				"LastPBHigh,LastPBLow,BreakoutUp,BreakoutDn,Event" + NewLine) ;
+			Flag_DebugHeaderWritten = True ;
+		End ;
+		
+		{ Determine if this bar should be logged based on verbosity and conditions }
+		Flag_LogThisBar = False ;
+		Text_EventType = "" ;
+		
+		{ Level 1 - Events Only: Log only when something happens }
+		If Input_DebugVerbosity = 1 Then
+		Begin
+			If Count_Pullback > Count_Pullback[1] Then
+			Begin
+				Flag_LogThisBar = True ;
+				Text_EventType = "PULLBACK" ;
+			End
+			Else If Flag_BreakoutUp Then
+			Begin
+				Flag_LogThisBar = True ;
+				Text_EventType = "BREAKOUT_UP" ;
+			End
+			Else If Flag_BreakoutDown Then
+			Begin
+				Flag_LogThisBar = True ;
+				Text_EventType = "BREAKOUT_DN" ;
+			End
+			Else If Trend <> Trend_Previous Then
+			Begin
+				Flag_LogThisBar = True ;
+				Text_EventType = "TREND_CHANGE" ;
+			End ;
+		End
+		
+		{ Level 2 - Normal: Log all bars }
+		Else If Input_DebugVerbosity = 2 Then
+		Begin
+			Flag_LogThisBar = True ;
+			If Count_Pullback > Count_Pullback[1] Then
+				Text_EventType = "PULLBACK"
+			Else If Flag_BreakoutUp Then
+				Text_EventType = "BREAKOUT_UP"
+			Else If Flag_BreakoutDown Then
+				Text_EventType = "BREAKOUT_DN"
+			Else If Trend <> Trend_Previous Then
+				Text_EventType = "TREND_CHANGE"
+			Else
+				Text_EventType = "NORMAL" ;
+		End
+		
+		{ Level 3 - Verbose: Log all bars with extra detail }
+		Else If Input_DebugVerbosity = 3 Then
+		Begin
+			Flag_LogThisBar = True ;
+			If Count_Pullback > Count_Pullback[1] Then
+				Text_EventType = "PULLBACK"
+			Else If Flag_TouchedBand and Can_CountPullback = False Then
+				Text_EventType = "TOUCH_NO_COUNT"
+			Else If Flag_BreakoutUp Then
+				Text_EventType = "BREAKOUT_UP"
+			Else If Flag_BreakoutDown Then
+				Text_EventType = "BREAKOUT_DN"
+			Else If Trend <> Trend_Previous Then
+				Text_EventType = "TREND_CHANGE"
+			Else If Flag_ImpulseDetected and Flag_ImpulseDetected <> Flag_ImpulseDetected[1] Then
+				Text_EventType = "IMPULSE_START"
+			Else
+				Text_EventType = "NORMAL" ;
+		End ;
+		
+		{ Conditional Logging - Override based on specific conditions }
+		If Input_DebugCondition > 0 Then
+		Begin
+			Flag_LogThisBar = False ;  { Reset, only log specific conditions }
+			
+			{ Condition 1 - Failed Pullback Attempts }
+			If Input_DebugCondition = 1 Then
+			Begin
+				If Flag_TouchedBand and Can_CountPullback = False Then
+				Begin
+					Flag_LogThisBar = True ;
+					Text_EventType = "FAILED_PB:" ;
+					If Flag_ImpulseDetected = False Then
+						Text_EventType = Text_EventType + "NoImpulse,"
+					Else If Num_BarsSincePB < Threshold_MinBarsSeparation Then
+						Text_EventType = Text_EventType + "TooSoon,"
+					Else If Trend = 0 Then
+						Text_EventType = Text_EventType + "NoTrend,"
+					Else If Flag_StochReady = False Then
+						Text_EventType = Text_EventType + "StochNotReady,"
+					Else If Flag_PriceReady = False Then
+						Text_EventType = Text_EventType + "PriceNotReady," ;
+				End ;
+			End
+			
+			{ Condition 2 - Stochastic Issues }
+			Else If Input_DebugCondition = 2 Then
+			Begin
+				If Flag_StochReady <> Flag_StochReady[1] Then
+				Begin
+					Flag_LogThisBar = True ;
+					Text_EventType = IffString(Flag_StochReady, "STOCH_ARMED", "STOCH_DISARMED") ;
+				End ;
+			End
+			
+			{ Condition 3 - Price Gate Issues }
+			Else If Input_DebugCondition = 3 Then
+			Begin
+				If Flag_PriceReady <> Flag_PriceReady[1] Then
+				Begin
+					Flag_LogThisBar = True ;
+					Text_EventType = IffString(Flag_PriceReady, "PRICE_ARMED", "PRICE_DISARMED") ;
+				End ;
+			End ;
+		End ;
+		
+		{ Write log line if this bar should be logged }
+		If Flag_LogThisBar Then
+		Begin
+			Text_DebugLine = NumToStr(Date, 0) + "," +
+				NumToStr(Time, 0) + "," +
+				NumToStr(Close, 2) + "," +
+				NumToStr(SMA1, 2) + "," +
+				NumToStr(SMA2, 2) + "," +
+				NumToStr(SMA_Reference, 2) + "," +
+				NumToStr(Trend, 0) + "," +
+				NumToStr(Count_Pullback, 0) + "," +
+				NumToStr(ATR_Value, 4) + "," +
+				NumToStr(Band_Upper, 2) + "," +
+				NumToStr(Band_Lower, 2) + "," +
+				NumToStr(Num_BarsSincePB, 0) + "," +
+				IffString(Flag_ImpulseDetected, "T", "F") + "," +
+				IffString(Flag_TouchedBand, "T", "F") + "," +
+				IffString(Flag_StochReady, "T", "F") + "," +
+				IffString(Flag_PriceReady, "T", "F") + "," +
+				IffString(Can_CountPullback, "T", "F") + "," +
+				NumToStr(Stoch_SlowK, 2) + "," +
+				NumToStr(Stoch_SlowD, 2) + "," +
+				NumToStr(SMA1_Slope3Bar, 4) + "," +
+				NumToStr(Price_LastPBHigh, 2) + "," +
+				NumToStr(Price_LastPBLow, 2) + "," +
+				IffString(Flag_BreakoutUp, "T", "F") + "," +
+				IffString(Flag_BreakoutDown, "T", "F") + "," +
+				Text_EventType + NewLine ;
+			
+			FileAppend(Input_DebugFilePath, Text_DebugLine) ;
+		End ;
+	End ;
+End ;
+
+{ ============================================
+  SECTION 14: COUNT PULLBACK
+  ============================================ }
+
+If Flag_TouchedBand and Can_CountPullback Then
+Begin
+	Count_Pullback = Count_Pullback + 1 ;
+	
+	Num_BarsSincePB = 0 ;
+	Flag_ImpulseDetected = False ;
+	
+	{ Consume cycle gates }
+	Flag_StochReady = False ;
+	Flag_PriceReady = False ;
+	
+	{ Reset leg anchors for the NEXT leg }
+	If Trend = 1 Then
+	Begin
+		{ Commented out: Price_LastPBHigh = Close ; }
+		Price_LastPBLow = Close ;
+	End
+	Else If Trend = -1 Then
+	Begin
+		{ Commented out: Price_LastPBLow = Close ; }
+		Price_LastPBHigh = Close ;
+	End ;
+	
+	{ Label text: 21P1, 50P2, etc. }
+	Text_Value = Text_MAId + "P" + NumToStr(Count_Pullback, 0) ;
+	
+	{ ATR-based offset }
+	Offset_Text = 0.20 * ATR_Value ;
+	
+	If Trend = -1 Then
+	Begin
+		ID_Text = Text_New(Date, Time, High + Offset_Text, Text_Value) ;
+		Value1 = Text_SetColor(ID_Text, Red) ;
+	End
+	Else If Trend = 1 Then
+	Begin
+		ID_Text = Text_New(Date, Time, Low - Offset_Text, Text_Value) ;
+		Value1 = Text_SetColor(ID_Text, Green) ;
+	End ;
+	
+	Value1 = Text_SetSize(ID_Text, 8) ;
+End ;
+
+{ ============================================
+  SECTION 15: PLOT OUTPUTS
+  ============================================ }
+
+If Input_ShowPlots Then
+Begin
+	Plot1(Band_Upper, "BandUp") ;
+	Plot2(Band_Lower, "BandDn") ;
+End ;
+
+Trend_Previous = Trend ;
