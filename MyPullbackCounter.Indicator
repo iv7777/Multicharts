@@ -33,7 +33,6 @@ Inputs:
 	Len_SMA2(50),                      { SMA2 length }
 	Input_RefSMA(1),                   { 1 = SMA1, 2 = SMA2 }
 	
-	Len_ATR(14),                       { ATR for band calculation }
 	Coeff_BandWidth(0.50),             { Band half-width = Coeff * ATR }
 	Coeff_ImpulseThreshold(1.00),      { Impulse distance from MA }
 	
@@ -58,6 +57,7 @@ Variables:
 	{ Moving Averages }
 	SMA1(0), SMA2(0),
 	SMA_Reference(0),
+	Len_ATR(0),                        { ATR length - matches selected reference SMA }
 	
 	{ Slope & Trend }
 	SMA1_Slope3Bar(0), SMA2_Slope3Bar(0),
@@ -100,7 +100,7 @@ Variables:
 	Flag_DebugHeaderWritten(False),
 	Flag_LogThisBar(False),
 	Text_DebugLine(""),
-	Text_EventType("");
+	Text_EventType("") ;
 
 { ============================================
   SECTION 1: MOVING AVERAGES
@@ -120,11 +120,13 @@ SMA2_Slope3Bar = SMA2 - SMA2[3] ;
 If Input_RefSMA = 1 Then
 Begin
 	SMA_Reference = SMA1 ;
+	Len_ATR = Len_SMA1 ;               { ATR uses same length as SMA1 }
 	Text_MAId = NumToStr(Len_SMA1, 0) ;
 End
 Else
 Begin
 	SMA_Reference = SMA2 ;
+	Len_ATR = Len_SMA2 ;               { ATR uses same length as SMA2 }
 	Text_MAId = NumToStr(Len_SMA2, 0) ;
 End ;
 
