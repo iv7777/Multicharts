@@ -18,6 +18,7 @@
   - Price leg breakout confirmation
   - Minimum bar separation between pullbacks
   - Comprehensive debug system with multiple levels
+  - Enhanced breakout detection (requires price outside bands)
   
   PLOTS:
   - Plot1: Band_Upper (upper ATR band)
@@ -94,6 +95,8 @@ Variables:
 	{ Breakout Detection }
 	Flag_BreakoutUp(False),
 	Flag_BreakoutDown(False),
+	Flag_WasBelowBand(False),          { Tracks if price was below lower band }
+	Flag_WasAboveBand(False),          { Tracks if price was above upper band }
 	
 	{ Debug System Variables }
 	Flag_InDebugWindow(False),
@@ -103,7 +106,25 @@ Variables:
 	Text_EventType("") ;
 
 { ============================================
-  SECTION 1: MOVING AVERAGES
+  SECTION 1: RESET ON FIRST BAR
+  ============================================ }
+
+If CurrentBar = 1 Then
+Begin
+	Trend_Previous = Trend ;
+	Count_Pullback = 0 ;
+	Num_BarsSincePB = 0 ;
+	Flag_ImpulseDetected = False ;
+	Flag_StochReady = False ;
+	Flag_PriceReady = False ;
+	Price_LastPBHigh = Close ;         { Seed leg anchors }
+	Price_LastPBLow = Close ;
+	Flag_WasBelowBand = False ;
+	Flag_WasAboveBand = False ;
+End ;
+
+{ ============================================
+  SECTION 2: MOVING AVERAGES
   ============================================ }
 
 SMA1 = Average(Close, Len_SMA1) ;
@@ -114,7 +135,7 @@ SMA1_Slope3Bar = SMA1 - SMA1[3] ;
 SMA2_Slope3Bar = SMA2 - SMA2[3] ;
 
 { ============================================
-  SECTION 2: REFERENCE MA SELECTION
+  SECTION 3: REFERENCE MA SELECTION
   ============================================ }
 
 If Input_RefSMA = 1 Then
@@ -131,7 +152,15 @@ Begin
 End ;
 
 { ============================================
-  SECTION 3: TREND DETECTION
+  SECTION 4: ATR BAND CALCULATION
+  ============================================ }
+
+ATR_Value = AvgTrueRange(Len_ATR) ;
+Band_Upper = SMA_Reference + Coeff_BandWidth * ATR_Value ;
+Band_Lower = SMA_Reference - Coeff_BandWidth * ATR_Value ;
+
+{ ============================================
+  SECTION 5: TREND DETECTION
   ============================================ }
 
 If (SMA1 > SMA2) and (SMA1_Slope3Bar > 0 or SMA2_Slope3Bar > 0) Then
@@ -142,90 +171,7 @@ Else
 	Trend = 0 ;
 
 { ============================================
-  SECTION 4: ATR BAND CALCULATION
-  ============================================ }
-
-ATR_Value = AvgTrueRange(Len_ATR) ;
-Band_Upper = SMA_Reference + Coeff_BandWidth * ATR_Value ;
-Band_Lower = SMA_Reference - Coeff_BandWidth * ATR_Value ;
-
-{ ============================================
-  SECTION 5: RESET ON FIRST BAR OR TREND FLIP
-  ============================================ }
-
-If CurrentBar = 1 Then
-Begin
-	Trend_Previous = Trend ;
-	Count_Pullback = 0 ;
-	Num_BarsSincePB = 0 ;
-	Flag_ImpulseDetected = False ;
-	Flag_StochReady = True ;           { PB1 allowed }
-	Flag_PriceReady = True ;           { PB1 allowed - no leg gating yet }
-	Price_LastPBHigh = Close ;         { Seed leg anchors }
-	Price_LastPBLow = Close ;
-End
-Else If Trend <> Trend_Previous Then
-Begin
-	Count_Pullback = 0 ;
-	Num_BarsSincePB = 0 ;
-	Flag_ImpulseDetected = False ;
-	Flag_StochReady = False ;
-	Flag_PriceReady = True ;
-	Price_LastPBHigh = Close ;         { Start new leg from here }
-	Price_LastPBLow = Close ;
-End ;
-
-{ ============================================
-  SECTION 6: BREAKOUT DETECTION
-  ============================================ }
-
-{ Uptrend: breakout THROUGH upper band from below }
-Flag_BreakoutUp = (Close > Band_Upper) and (Close[1] <= Band_Upper) ;
-If Flag_BreakoutUp Then
-Begin
-	Flag_StochReady = False ;          { Require full stochastic cycle }
-	Num_BarsSincePB = 0 ;              { Need minimum bars before counting pullback }
-End ;
-
-{ Downtrend: breakout THROUGH lower band from above }
-Flag_BreakoutDown = (Close < Band_Lower) and (Close[1] >= Band_Lower) ;
-If Flag_BreakoutDown Then
-Begin 
-	Flag_StochReady = False ;          { Require full stochastic cycle }
-	Num_BarsSincePB = 0 ;              { Need minimum bars before counting pullback }
-End ;
-
-{ ============================================
-  SECTION 7: RESET ON BREAKOUT FAILURE
-  ============================================ }
-
-If Trend = -1 and Close > Band_Upper Then
-Begin
-	{ Bear breakout failure - price popped above band }
-	Count_Pullback = 0 ;
-	Num_BarsSincePB = 0 ;
-	Flag_StochReady = False ;          { Must see NEW SlowK cross after this }
-	Flag_PriceReady = True ;           { PB1 allowed once StochReady is re-armed }
-	Flag_ImpulseDetected = False ;
-	Price_LastPBHigh = Close ;         { Re-anchor leg extremes by close }
-	Price_LastPBLow = Close ;
-End
-Else If Trend = 1 and Close < Band_Lower Then
-Begin
-	{ Bull breakout failure - price dropped below band }
-	Count_Pullback = 0 ;
-	Num_BarsSincePB = 0 ;
-	Flag_StochReady = False ;
-	Flag_PriceReady = True ;
-	Flag_ImpulseDetected = False ;
-	Price_LastPBHigh = Close ;
-	Price_LastPBLow = Close ;
-End ;
-
-Num_BarsSincePB = Num_BarsSincePB + 1 ;
-
-{ ============================================
-  SECTION 8: STOCHASTIC CALCULATION & GATING
+  SECTION 6: STOCHASTIC CALCULATION & GATING
   ============================================ }
 
 If Input_UseStochFilter Then
@@ -252,44 +198,7 @@ Else
 	Flag_StochReady = True ;
 
 { ============================================
-  SECTION 9: LEG ANCHOR UPDATES & PRICE GATING
-  ============================================ }
-
-{ Uptrend - Track highest close in current leg }
-If Flag_BreakoutUp and (Count_Pullback = 0) Then
-	Price_LastPBHigh = Close
-Else If (Trend = 1) and (Count_Pullback = 0) and (Close > Price_LastPBHigh) Then
-	Price_LastPBHigh = Close
-{ For PB2, PB3,... gating: after a PB we reset Price_LastPBHigh to PB close,
-  then we consider a new leg confirmed only once Close breaks above it }
-Else If Trend = 1 Then
-Begin
-	If Close > Price_LastPBHigh Then
-	Begin
-		{ New highest close in current up leg }
-		Price_LastPBHigh = Close ;
-		Flag_PriceReady = True ;   { Allow next PB in this leg }
-	End ;
-End ;
-
-{ Downtrend - Track lowest close in current leg }
-If Flag_BreakoutDown and (Count_Pullback = 0) Then
-	Price_LastPBLow = Close
-Else If (Trend = -1) and (Count_Pullback = 0) and (Close < Price_LastPBLow) Then
-	Price_LastPBLow = Close
-{ For PB2, PB3,... gating in downtrend }
-Else If Trend = -1 Then
-Begin
-	If Close < Price_LastPBLow Then
-	Begin
-		{ New lowest close in current down leg }
-		Price_LastPBLow = Close ;
-		Flag_PriceReady = True ;
-	End ;
-End ;
-
-{ ============================================
-  SECTION 10: IMPULSE DETECTION
+  SECTION 7: IMPULSE DETECTION
   ============================================ }
 
 If Trend = 1 Then
@@ -304,13 +213,13 @@ Begin
 End ;
 
 { ============================================
-  SECTION 11: BAND TOUCH DETECTION
+  SECTION 8: BAND TOUCH DETECTION
   ============================================ }
 
 Flag_TouchedBand = (High >= Band_Lower) and (Low <= Band_Upper) ;
 
 { ============================================
-  SECTION 12: PULLBACK CONDITIONS
+  SECTION 9: PULLBACK CONDITIONS
   ============================================ }
 
 Can_CountPullback = Flag_ImpulseDetected and
@@ -320,7 +229,7 @@ Can_CountPullback = Flag_ImpulseDetected and
                     Flag_PriceReady ;
 
 { ============================================
-  SECTION 13: DEBUG SYSTEM - ENHANCED
+  SECTION 10: DEBUG SYSTEM
   ============================================ }
 
 If Input_EnableDebug Then
@@ -489,7 +398,7 @@ Begin
 End ;
 
 { ============================================
-  SECTION 14: COUNT PULLBACK
+  SECTION 11: COUNT PULLBACK
   ============================================ }
 
 If Flag_TouchedBand and Can_CountPullback Then
@@ -502,18 +411,6 @@ Begin
 	{ Consume cycle gates }
 	Flag_StochReady = False ;
 	Flag_PriceReady = False ;
-	
-	{ Reset leg anchors for the NEXT leg }
-	If Trend = 1 Then
-	Begin
-		{ Commented out: Price_LastPBHigh = Close ; }
-		Price_LastPBLow = Close ;
-	End
-	Else If Trend = -1 Then
-	Begin
-		{ Commented out: Price_LastPBLow = Close ; }
-		Price_LastPBHigh = Close ;
-	End ;
 	
 	{ Label text: 21P1, 50P2, etc. }
 	Text_Value = Text_MAId + "P" + NumToStr(Count_Pullback, 0) ;
@@ -536,6 +433,73 @@ Begin
 End ;
 
 { ============================================
+  SECTION 12: BREAKOUT DETECTION
+  ============================================ }
+
+{ Track if price was outside the bands (required for valid breakout) }
+{ For upward breakout: need to have been below lower band first }
+If Close < Band_Lower Then
+	Flag_WasBelowBand = True ;
+
+{ For downward breakout: need to have been above upper band first }
+If Close > Band_Upper Then
+	Flag_WasAboveBand = True ;
+
+{ Upward Breakout: THROUGH upper band from below }
+{ Requires: (1) Close breaks above upper band, 
+            (2) Previous bar was at/below upper band,
+            (3) At least one bar was below lower band }
+Flag_BreakoutUp = (Close > Band_Upper) and 
+                  (Close[1] <= Band_Upper) and 
+                  Flag_WasBelowBand ;
+
+{ Downward Breakout: THROUGH lower band from above }
+{ Requires: (1) Close breaks below lower band,
+            (2) Previous bar was at/above lower band,
+            (3) At least one bar was above upper band }
+Flag_BreakoutDown = (Close < Band_Lower) and 
+                    (Close[1] >= Band_Lower) and 
+                    Flag_WasAboveBand ;
+
+{ ============================================
+  SECTION 13: RESET ON BREAKOUT OR TREND FLIP
+  ============================================ }
+
+If Flag_BreakoutUp or Flag_BreakoutDown or Trend <> Trend_Previous Then
+Begin
+	Count_Pullback = 0 ;
+	Num_BarsSincePB = 0 ;
+	Flag_StochReady = False ;          { Must see NEW SlowK cross after this }
+	Flag_PriceReady = True ;          { PB1 allowed once StochReady is re-armed }
+	Flag_ImpulseDetected = False ;
+	Price_LastPBHigh = Close ;         { Re-anchor leg extremes by close }
+	Price_LastPBLow = Close ;
+	Flag_WasBelowBand = False ;        { Reset breakout tracking }
+	Flag_WasAboveBand = False ;
+	If Trend <> Trend_Previous Then Trend_Previous = Trend ;
+End ;
+
+{ ============================================
+  SECTION 14: LEG ANCHOR UPDATES & PRICE GATING
+  ============================================ }
+
+If Close > Price_LastPBHigh and Close > Band_Upper Then
+Begin
+	{ New highest close in current up leg }
+	Price_LastPBHigh = Close ;
+	Flag_PriceReady = True ;           { Allow next PB in this leg }
+End ;
+
+If Close < Price_LastPBLow and Close < Band_Lower Then
+Begin
+	{ New lowest close in current down leg }
+	Price_LastPBLow = Close ;
+	Flag_PriceReady = True ;
+End ;
+
+Num_BarsSincePB = Num_BarsSincePB + 1 ;
+
+{ ============================================
   SECTION 15: PLOT OUTPUTS
   ============================================ }
 
@@ -544,5 +508,3 @@ Begin
 	Plot1(Band_Upper, "BandUp") ;
 	Plot2(Band_Lower, "BandDn") ;
 End ;
-
-Trend_Previous = Trend ;
