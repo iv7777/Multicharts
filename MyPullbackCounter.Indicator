@@ -229,7 +229,35 @@ Can_CountPullback = Flag_ImpulseDetected and
                     Flag_PriceReady ;
 
 { ============================================
-  SECTION 10: DEBUG SYSTEM
+  SECTION 10: COUNT PULLBACK
+  ============================================ }
+
+If Flag_TouchedBand and Can_CountPullback Then
+Begin
+	Count_Pullback = Count_Pullback + 1 ;
+
+	{ Label text: 21P1, 50P2, etc. }
+	Text_Value = Text_MAId + "P" + NumToStr(Count_Pullback, 0) ;
+	
+	{ ATR-based offset }
+	Offset_Text = 0.20 * ATR_Value ;
+	
+	If Trend = -1 Then
+	Begin
+		ID_Text = Text_New(Date, Time, High + Offset_Text, Text_Value) ;
+		Value1 = Text_SetColor(ID_Text, Red) ;
+	End
+	Else If Trend = 1 Then
+	Begin
+		ID_Text = Text_New(Date, Time, Low - Offset_Text, Text_Value) ;
+		Value1 = Text_SetColor(ID_Text, Green) ;
+	End ;
+	
+	Value1 = Text_SetSize(ID_Text, 8) ;
+End ;
+
+{ ============================================
+  SECTION 11: DEBUG SYSTEM
   ============================================ }
 
 If Input_EnableDebug Then
@@ -398,42 +426,21 @@ Begin
 End ;
 
 { ============================================
-  SECTION 11: COUNT PULLBACK
+  SECTION 12: RESET AFTER PULLBACK
   ============================================ }
 
 If Flag_TouchedBand and Can_CountPullback Then
 Begin
-	Count_Pullback = Count_Pullback + 1 ;
-	
 	Num_BarsSincePB = 0 ;
 	Flag_ImpulseDetected = False ;
 	
 	{ Consume cycle gates }
 	Flag_StochReady = False ;
 	Flag_PriceReady = False ;
-	
-	{ Label text: 21P1, 50P2, etc. }
-	Text_Value = Text_MAId + "P" + NumToStr(Count_Pullback, 0) ;
-	
-	{ ATR-based offset }
-	Offset_Text = 0.20 * ATR_Value ;
-	
-	If Trend = -1 Then
-	Begin
-		ID_Text = Text_New(Date, Time, High + Offset_Text, Text_Value) ;
-		Value1 = Text_SetColor(ID_Text, Red) ;
-	End
-	Else If Trend = 1 Then
-	Begin
-		ID_Text = Text_New(Date, Time, Low - Offset_Text, Text_Value) ;
-		Value1 = Text_SetColor(ID_Text, Green) ;
-	End ;
-	
-	Value1 = Text_SetSize(ID_Text, 8) ;
-End ;
+End;
 
 { ============================================
-  SECTION 12: BREAKOUT DETECTION
+  SECTION 13: BREAKOUT DETECTION
   ============================================ }
 
 { Track if price was outside the bands (required for valid breakout) }
@@ -462,7 +469,7 @@ Flag_BreakoutDown = (Close < Band_Lower) and
                     Flag_WasAboveBand ;
 
 { ============================================
-  SECTION 13: RESET ON BREAKOUT OR TREND FLIP
+  SECTION 14: RESET ON BREAKOUT OR TREND FLIP
   ============================================ }
 
 If Flag_BreakoutUp or Flag_BreakoutDown or Trend <> Trend_Previous Then
@@ -480,7 +487,7 @@ Begin
 End ;
 
 { ============================================
-  SECTION 14: LEG ANCHOR UPDATES & PRICE GATING
+  SECTION 15: LEG ANCHOR UPDATES & PRICE GATING
   ============================================ }
 
 If Close > Price_LastPBHigh and Close > Band_Upper Then
@@ -500,7 +507,7 @@ End ;
 Num_BarsSincePB = Num_BarsSincePB + 1 ;
 
 { ============================================
-  SECTION 15: PLOT OUTPUTS
+  SECTION 16: PLOT OUTPUTS
   ============================================ }
 
 If Input_ShowPlots Then
