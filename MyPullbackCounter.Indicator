@@ -17,6 +17,7 @@
   - Stochastic cycle gating
   - Price leg breakout confirmation
   - Minimum bar separation between pullbacks
+  - "Ready" markers when conditions align for next pullback
   - Comprehensive debug system with multiple levels
   - Enhanced breakout detection (requires price outside bands)
   
@@ -26,6 +27,7 @@
   
   ANNOTATIONS:
   - Text labels at pullback points (e.g., "21P1", "50P2")
+  - Text labels at ready points (e.g., "21R1", "50R2")
   ================================================ }
 
 Inputs:
@@ -43,6 +45,7 @@ Inputs:
 	Len_Stoch(14),
 	
 	Input_ShowPlots(True),             { Show BandUpper/BandLower plots }
+	Input_ShowReadyMarkers(True),      { Show "Ready" markers (21R1, 50R2, etc.) }
 	
 	{ Debug System Controls }
 	Input_EnableDebug(False),                                    { Master debug switch }
@@ -75,6 +78,9 @@ Variables:
 	Flag_TouchedBand(False),
 	Can_CountPullback(False),
 	
+	{ Ready Marker Tracking }
+	Flag_ReadyMarked(False),           { Has current ready cycle been marked? }
+	
 	{ Stochastic }
 	Stoch_FastK(0), Stoch_FastD(0),
 	Stoch_SlowK(0), Stoch_SlowD(0),
@@ -83,9 +89,10 @@ Variables:
 	{ Gating Flags }
 	Flag_StochReady(False),
 	Flag_PriceReady(False),
+	Flag_PriceReady_Prev(False),   { Track previous state for transition detection }
 	Price_LastPBHigh(0),               { Highest close in current up leg }
 	Price_LastPBLow(0),                { Lowest close in current down leg }
-	
+    	
 	{ Text Labels }
 	Text_MAId(""),
 	Text_Value(""),
@@ -117,6 +124,8 @@ Begin
 	Flag_ImpulseDetected = False ;
 	Flag_StochReady = False ;
 	Flag_PriceReady = False ;
+	Flag_ReadyMarked = False ;
+	Flag_PriceReady_Prev = False ;
 	Price_LastPBHigh = Close ;         { Seed leg anchors }
 	Price_LastPBLow = Close ;
 	Flag_WasBelowBand = False ;
@@ -239,8 +248,11 @@ Begin
 	{ Label text: 21P1, 50P2, etc. }
 	Text_Value = Text_MAId + "P" + NumToStr(Count_Pullback, 0) ;
 	
-	{ ATR-based offset }
-	Offset_Text = 0.20 * ATR_Value ;
+	{ Different ATR-based offset for different SMA }
+	If Input_RefSMA = 1 Then
+        Offset_Text = 0.5 * ATR_Value
+    Else
+        Offset_Text = 1.2 * ATR_Value ;
 	
 	If Trend = -1 Then
 	Begin
@@ -276,7 +288,7 @@ Begin
 				"ATR,BandUp,BandDn,BarsSincePB," +
 				"Impulse,Touch,StochRDY,PriceRDY,Allow," +
 				"SlowK,SlowD,Slope3Bar," +
-				"LastPBHigh,LastPBLow,BreakoutUp,BreakoutDn,Event" + NewLine) ;
+				"LastPBHigh,LastPBLow,BreakoutUp,BreakoutDn,ReadyMarked,Event" + NewLine) ;
 			Flag_DebugHeaderWritten = True ;
 		End ;
 		
@@ -291,6 +303,11 @@ Begin
 			Begin
 				Flag_LogThisBar = True ;
 				Text_EventType = "PULLBACK" ;
+			End
+			Else If Flag_ReadyMarked and Flag_ReadyMarked <> Flag_ReadyMarked[1] Then
+			Begin
+				Flag_LogThisBar = True ;
+				Text_EventType = "READY_MARKED" ;
 			End
 			Else If Flag_BreakoutUp Then
 			Begin
@@ -315,6 +332,8 @@ Begin
 			Flag_LogThisBar = True ;
 			If Count_Pullback > Count_Pullback[1] Then
 				Text_EventType = "PULLBACK"
+			Else If Flag_ReadyMarked and Flag_ReadyMarked <> Flag_ReadyMarked[1] Then
+				Text_EventType = "READY_MARKED"
 			Else If Flag_BreakoutUp Then
 				Text_EventType = "BREAKOUT_UP"
 			Else If Flag_BreakoutDown Then
@@ -331,6 +350,8 @@ Begin
 			Flag_LogThisBar = True ;
 			If Count_Pullback > Count_Pullback[1] Then
 				Text_EventType = "PULLBACK"
+			Else If Flag_ReadyMarked and Flag_ReadyMarked <> Flag_ReadyMarked[1] Then
+				Text_EventType = "READY_MARKED"
 			Else If Flag_TouchedBand and Can_CountPullback = False Then
 				Text_EventType = "TOUCH_NO_COUNT"
 			Else If Flag_BreakoutUp Then
@@ -418,6 +439,7 @@ Begin
 				NumToStr(Price_LastPBLow, 2) + "," +
 				IffString(Flag_BreakoutUp, "T", "F") + "," +
 				IffString(Flag_BreakoutDown, "T", "F") + "," +
+				IffString(Flag_ReadyMarked, "T", "F") + "," +
 				Text_EventType + NewLine ;
 			
 			FileAppend(Input_DebugFilePath, Text_DebugLine) ;
@@ -437,6 +459,9 @@ Begin
 	{ Consume cycle gates }
 	Flag_StochReady = False ;
 	Flag_PriceReady = False ;
+	
+	{ Reset ready marker flag - new cycle begins }
+	Flag_ReadyMarked = False ;
 End;
 
 { ============================================
@@ -477,8 +502,9 @@ Begin
 	Count_Pullback = 0 ;
 	Num_BarsSincePB = 0 ;
 	Flag_StochReady = False ;          { Must see NEW SlowK cross after this }
-	Flag_PriceReady = True ;          { PB1 allowed once StochReady is re-armed }
+	Flag_PriceReady = True ;           { PB1 allowed once StochReady is re-armed }
 	Flag_ImpulseDetected = False ;
+	Flag_ReadyMarked = False ;         { Reset ready marker flag }
 	Price_LastPBHigh = Close ;         { Re-anchor leg extremes by close }
 	Price_LastPBLow = Close ;
 	Flag_WasBelowBand = False ;        { Reset breakout tracking }
@@ -507,7 +533,55 @@ End ;
 Num_BarsSincePB = Num_BarsSincePB + 1 ;
 
 { ============================================
-  SECTION 16: PLOT OUTPUTS
+  SECTION 16: READY MARKERS
+  ============================================ }
+
+{ Mark when conditions are ready for NEXT pullback }
+{ Only mark after we've had at least 1 pullback }
+{ Example: "21R2" means ready after 1st pullback (next will be PB2) }
+
+If Input_ShowReadyMarkers Then
+Begin
+	{ Detect transition: Flag_PriceReady goes False → True }
+	If Flag_PriceReady and Flag_PriceReady_Prev = False Then
+	Begin
+		{ Only mark if we've had at least one pullback and haven't marked this cycle yet }
+		If Count_Pullback >= 1 and Flag_ReadyMarked = False Then
+		Begin
+			{ Label text: 21R2, 50R3, etc. }
+			{ "R2" means ready for 2nd pullback (after 1st pullback counted) }
+			Text_Value = Text_MAId + "R" + NumToStr(Count_Pullback + 1, 0) ;
+			
+			{ Different ATR-based offset for different SMA }
+			If Input_RefSMA = 1 Then
+                Offset_Text = 0.5 * ATR_Value
+            Else
+                Offset_Text = 1.2 * ATR_Value ;
+			
+            If Trend = -1 Then
+			Begin
+				{ Downtrend: place below price, use Magenta }
+				ID_Text = Text_New(Date, Time, Low - Offset_Text, Text_Value) ;
+				Value1 = Text_SetColor(ID_Text, Magenta) ;
+			End
+			Else If Trend = 1 Then
+			Begin
+				{ Uptrend: place above price, use Cyan }
+				ID_Text = Text_New(Date, Time, High + Offset_Text, Text_Value) ;
+				Value1 = Text_SetColor(ID_Text, Cyan) ;
+			End ;
+			
+			Value1 = Text_SetSize(ID_Text, 8) ;
+			Flag_ReadyMarked = True ;
+		End ;
+	End ;
+End ;
+
+{ Update previous state for next bar }
+Flag_PriceReady_Prev = Flag_PriceReady ;
+
+{ ============================================
+  SECTION 17: PLOT OUTPUTS
   ============================================ }
 
 If Input_ShowPlots Then
