@@ -20,14 +20,18 @@
   - "Ready" markers when conditions align for next pullback
   - Comprehensive debug system with multiple levels
   - Enhanced breakout detection (requires price outside bands)
+  - Strategy data outputs (Trend, PBCount, NextPBReady)
   
   PLOTS:
   - Plot1: Band_Upper (upper ATR band)
   - Plot2: Band_Lower (lower ATR band)
+  - Plot3: Trend (-1=Down, 0=Neutral, 1=Up)
+  - Plot4: PBCount (pullback count)
+  - Plot5: NextPBReady (1=ready, 0=not ready)
   
   ANNOTATIONS:
   - Text labels at pullback points (e.g., "21P1", "50P2")
-  - Text labels at ready points (e.g., "21R1", "50R2")
+  - Text labels at ready points (e.g., "21R2", "50R3")
   ================================================ }
 
 Inputs:
@@ -44,8 +48,9 @@ Inputs:
 	Input_UseStochFilter(True),        { Use slow stochastic filter }
 	Len_Stoch(14),
 	
-	Input_ShowPlots(True),             { Show BandUpper/BandLower plots }
-	Input_ShowReadyMarkers(True),      { Show "Ready" markers (21R1, 50R2, etc.) }
+	Input_ShowPlots(False),             { Show BandUpper/BandLower plots }
+	Input_ShowReadyMarkers(True),      { Show "Ready" markers (21R2, 50R3, etc.) }
+	Input_ShowStrategyData(False),     { Show Trend/PBCount/NextPBReady plots (default invisible) }
 	
 	{ Debug System Controls }
 	Input_EnableDebug(False),                                    { Master debug switch }
@@ -80,6 +85,7 @@ Variables:
 	
 	{ Ready Marker Tracking }
 	Flag_ReadyMarked(False),           { Has current ready cycle been marked? }
+	Flag_NextPBReady(False),           { Continuous ready status for strategy }
 	
 	{ Stochastic }
 	Stoch_FastK(0), Stoch_FastD(0),
@@ -125,6 +131,7 @@ Begin
 	Flag_StochReady = False ;
 	Flag_PriceReady = False ;
 	Flag_ReadyMarked = False ;
+	Flag_NextPBReady = False ;
 	Flag_PriceReady_Prev = False ;
 	Price_LastPBHigh = Close ;         { Seed leg anchors }
 	Price_LastPBLow = Close ;
@@ -288,7 +295,7 @@ Begin
 				"ATR,BandUp,BandDn,BarsSincePB," +
 				"Impulse,Touch,StochRDY,PriceRDY,Allow," +
 				"SlowK,SlowD,Slope3Bar," +
-				"LastPBHigh,LastPBLow,BreakoutUp,BreakoutDn,ReadyMarked,Event" + NewLine) ;
+				"LastPBHigh,LastPBLow,BreakoutUp,BreakoutDn,ReadyMarked,NextPBReady,Event" + NewLine) ;
 			Flag_DebugHeaderWritten = True ;
 		End ;
 		
@@ -440,6 +447,7 @@ Begin
 				IffString(Flag_BreakoutUp, "T", "F") + "," +
 				IffString(Flag_BreakoutDown, "T", "F") + "," +
 				IffString(Flag_ReadyMarked, "T", "F") + "," +
+				IffString(Flag_NextPBReady, "T", "F") + "," +
 				Text_EventType + NewLine ;
 			
 			FileAppend(Input_DebugFilePath, Text_DebugLine) ;
@@ -462,6 +470,7 @@ Begin
 	
 	{ Reset ready marker flag - new cycle begins }
 	Flag_ReadyMarked = False ;
+    Flag_NextPBReady = False ;         { Reset continuous ready status }
 End;
 
 { ============================================
@@ -505,6 +514,7 @@ Begin
 	Flag_PriceReady = True ;           { PB1 allowed once StochReady is re-armed }
 	Flag_ImpulseDetected = False ;
 	Flag_ReadyMarked = False ;         { Reset ready marker flag }
+	Flag_NextPBReady = False ;         { Reset continuous ready status }
 	Price_LastPBHigh = Close ;         { Re-anchor leg extremes by close }
 	Price_LastPBLow = Close ;
 	Flag_WasBelowBand = False ;        { Reset breakout tracking }
@@ -558,7 +568,7 @@ Begin
             Else
                 Offset_Text = 1.2 * ATR_Value ;
 			
-            If Trend = -1 Then
+			If Trend = -1 Then
 			Begin
 				{ Downtrend: place below price, use Magenta }
 				ID_Text = Text_New(Date, Time, Low - Offset_Text, Text_Value) ;
@@ -577,6 +587,10 @@ Begin
 	End ;
 End ;
 
+{ Set continuous ready status flag for strategy consumption }
+If Flag_PriceReady and Flag_PriceReady_Prev = False and Count_Pullback >= 1 Then
+	Flag_NextPBReady = True ;
+
 { Update previous state for next bar }
 Flag_PriceReady_Prev = Flag_PriceReady ;
 
@@ -589,3 +603,23 @@ Begin
 	Plot1(Band_Upper, "BandUp") ;
 	Plot2(Band_Lower, "BandDn") ;
 End ;
+
+{ ============================================
+  SECTION 18: STRATEGY DATA OUTPUTS
+  ============================================ }
+
+{ Export indicator state for strategy consumption }
+{ Plots always execute so strategy can read values }
+{ Visibility controlled by Input_ShowStrategyData }
+Plot3(Trend, "Trend") ;                              { -1=Downtrend, 0=Neutral, 1=Uptrend }
+Plot4(Count_Pullback, "PBCount") ;                   { Current pullback count }
+Plot5(IFF(Flag_NextPBReady, 1, 0), "NextPBReady") ;  { 1=Ready for next PB, 0=Not ready }
+
+{ Set plots to invisible by default - user can override in chart formatting }
+If Input_ShowStrategyData = False Then
+Begin
+	SetPlotColor(3, RGB(0, 0, 0)) ;  { Black = invisible }
+	SetPlotColor(4, RGB(0, 0, 0)) ;
+	SetPlotColor(5, RGB(0, 0, 0)) ;
+End ;
+{ If Input_ShowStrategyData = True, chart formatting controls appearance }
