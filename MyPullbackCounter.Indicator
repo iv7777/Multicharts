@@ -179,12 +179,10 @@ Band_Lower = SMA_Reference - Coeff_BandWidth * ATR_Value ;
   SECTION 5: TREND DETECTION
   ============================================ }
 
-If (SMA1 > SMA2) and (SMA1_Slope3Bar > 0 or SMA2_Slope3Bar > 0) Then
+If (SMA1_Slope3Bar > 0 and Input_RefSMA = 1) or (SMA2_Slope3Bar > 0 and Input_RefSMA =2) Then
 	Trend = 1
-Else If (SMA1 < SMA2) and (SMA1_Slope3Bar < 0 or SMA2_Slope3Bar < 0) Then
-	Trend = -1
 Else
-	Trend = 0 ;
+	Trend = -1 ;
 
 { ============================================
   SECTION 6: STOCHASTIC CALCULATION & GATING
@@ -243,9 +241,38 @@ Can_CountPullback = Flag_ImpulseDetected and
                     (Trend <> 0) and
                     Flag_StochReady and
                     Flag_PriceReady ;
+                    
+{ ============================================
+  SECTION 10: BREAKOUT DETECTION
+  ============================================ }
+
+{ Track if price was outside the bands (required for valid breakout) }
+{ For upward breakout: need to have been below lower band first }
+If Close < Band_Lower Then
+	Flag_WasBelowBand = True ;
+
+{ For downward breakout: need to have been above upper band first }
+If Close > Band_Upper Then
+	Flag_WasAboveBand = True ;
+
+{ Upward Breakout: THROUGH upper band from below }
+{ Requires: (1) Close breaks above upper band, 
+            (2) Previous bar was at/below upper band,
+            (3) At least one bar was below lower band }
+Flag_BreakoutUp = (Close > Band_Upper) and 
+                  (Close[1] <= Band_Upper) and 
+                  Flag_WasBelowBand ;
+
+{ Downward Breakout: THROUGH lower band from above }
+{ Requires: (1) Close breaks below lower band,
+            (2) Previous bar was at/above lower band,
+            (3) At least one bar was above upper band }
+Flag_BreakoutDown = (Close < Band_Lower) and 
+                    (Close[1] >= Band_Lower) and 
+                    Flag_WasAboveBand ;
 
 { ============================================
-  SECTION 10: COUNT PULLBACK
+  SECTION 11: COUNT PULLBACK
   ============================================ }
 
 If Flag_TouchedBand and Can_CountPullback Then
@@ -254,7 +281,9 @@ Begin
 
 	{ Label text: 21P1, 50P2, etc. }
 	Text_Value = Text_MAId + "P" + NumToStr(Count_Pullback, 0) ;
-	
+	{ Add "B" suffix to text for breakout }
+    If Flag_BreakoutUp or Flag_BreakoutDown Then
+        Text_Value = Text_Value + "B" ;
 	{ Different ATR-based offset for different SMA }
 	If Input_RefSMA = 1 Then
         Offset_Text = 0.5 * ATR_Value
@@ -276,7 +305,7 @@ Begin
 End ;
 
 { ============================================
-  SECTION 11: DEBUG SYSTEM
+  SECTION 12: DEBUG SYSTEM
   ============================================ }
 
 If Input_EnableDebug Then
@@ -456,7 +485,7 @@ Begin
 End ;
 
 { ============================================
-  SECTION 12: RESET AFTER PULLBACK
+  SECTION 13: RESET AFTER PULLBACK
   ============================================ }
 
 If Flag_TouchedBand and Can_CountPullback Then
@@ -474,42 +503,12 @@ Begin
 End;
 
 { ============================================
-  SECTION 13: BREAKOUT DETECTION
-  ============================================ }
-
-{ Track if price was outside the bands (required for valid breakout) }
-{ For upward breakout: need to have been below lower band first }
-If Close < Band_Lower Then
-	Flag_WasBelowBand = True ;
-
-{ For downward breakout: need to have been above upper band first }
-If Close > Band_Upper Then
-	Flag_WasAboveBand = True ;
-
-{ Upward Breakout: THROUGH upper band from below }
-{ Requires: (1) Close breaks above upper band, 
-            (2) Previous bar was at/below upper band,
-            (3) At least one bar was below lower band }
-Flag_BreakoutUp = (Close > Band_Upper) and 
-                  (Close[1] <= Band_Upper) and 
-                  Flag_WasBelowBand ;
-
-{ Downward Breakout: THROUGH lower band from above }
-{ Requires: (1) Close breaks below lower band,
-            (2) Previous bar was at/above lower band,
-            (3) At least one bar was above upper band }
-Flag_BreakoutDown = (Close < Band_Lower) and 
-                    (Close[1] >= Band_Lower) and 
-                    Flag_WasAboveBand ;
-
-{ ============================================
   SECTION 14: RESET ON BREAKOUT OR TREND FLIP
   ============================================ }
 
 If Flag_BreakoutUp or Flag_BreakoutDown or Trend <> Trend_Previous Then
 Begin
 	Count_Pullback = 0 ;
-	Num_BarsSincePB = 0 ;
 	Flag_StochReady = False ;          { Must see NEW SlowK cross after this }
 	Flag_PriceReady = True ;           { PB1 allowed once StochReady is re-armed }
 	Flag_ImpulseDetected = False ;
@@ -540,7 +539,10 @@ Begin
 	Flag_PriceReady = True ;
 End ;
 
-Num_BarsSincePB = Num_BarsSincePB + 1 ;
+If Flag_BreakoutUp or Flag_BreakoutDown Then
+	Num_BarsSincePB = 0
+Else
+    Num_BarsSincePB = Num_BarsSincePB + 1 ;
 
 { ============================================
   SECTION 16: READY MARKERS
