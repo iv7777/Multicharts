@@ -1,0 +1,208 @@
+{====================================================================
+ Indicator: ExtremeATRVol_SnapbackSetup
+
+ PURPOSE (HIGH LEVEL)
+ ---------------------------------------------------------------------
+ This indicator identifies *EXTREME downside price dislocations*
+ in a liquid ETF (e.g. SOXX) that are statistically likely to
+ experience a *multi-day mean-reversion snapback*.
+
+ This is NOT a trend-following tool.
+ This is designed to detect:
+   - Forced selling
+   - Volatility shocks
+   - Exhaustion of downside pressure
+
+ The output is VISUAL only:
+   - D_ATR line (how far price is from its mean in ATR units)
+   - An "x" below price when an extreme snapback setup completes
+
+ Designed for:
+   - DAILY charts
+   - Holding time: days (not intraday)
+====================================================================}
+
+Inputs:
+    MeanLen(50),          // Length of the moving average used as
+                          // "fair value" (SMA50 is standard for ETFs)
+
+    ATRLen(14),           // ATR lookback used to normalize distance
+                          // (ATR expresses movement in volatility units)
+
+    BaseLen(63),          // Lookback window to define "normal" volatility
+                          // Used to detect volatility expansion / shock
+
+    StretchK(2.70),       // How many ATRs below the mean qualifies as
+                          // a *strong* downside extreme
+
+    PanicK(3.50),         // Panic / liquidation level (visual reference only)
+
+    TRMult(1.80),         // True Range shock threshold:
+                          // TR >= TRMult * ATR indicates forced movement
+
+    ATRpctMult(1.25),     // Alternative shock condition:
+                          // ATR% >= 1.25 × baseline ATR%
+
+    StallBars(2),         // Number of bars price must STOP accelerating down
+                          // to confirm selling exhaustion
+
+    StallTolATR(0.25),    // How much "new low" is tolerated during stall
+                          // expressed in ATR units
+
+    TextOffsetATR(0.60);  // Vertical offset (in ATRs) to draw the "x"
+                          // below the bar so it is clearly visible
+
+Vars:
+    Mean(0),              // SMA(MeanLen) → proxy for fair value
+    ATRv(0),              // Average True Range → volatility measure
+    TRv(0),               // True Range of current bar
+
+    ATRpct(0),            // ATR expressed as % of price
+    ATRpctBase(0),        // Baseline ATR% → "normal" volatility
+
+    D_ATR(0),             // ATR deviation score:
+                          // (Close - Mean) / ATR
+
+    Stretch(false),       // TRUE when price is far below mean
+    Shock(false),         // TRUE when volatility expansion confirms panic
+
+    Pending(false),       // Internal state:
+                          // Extreme detected, waiting for exhaustion
+
+    ExtremeLow(0),        // Lowest low recorded during the extreme move
+    StallCount(0),        // Counts bars with no meaningful new lows
+    ExtremeDown(false);   // One-bar pulse when snapback setup completes
+
+{====================================================================
+ 1) CORE CALCULATIONS
+ ---------------------------------------------------------------------
+ Compute the basic building blocks:
+   - Mean price
+   - Volatility
+   - Distance from mean (D_ATR)
+====================================================================}
+
+{--- Fair value mean ---}
+Mean = Average(Close, MeanLen);
+
+{--- Volatility measures ---}
+ATRv = AvgTrueRange(ATRLen);
+TRv  = TrueRange;
+
+{--- ATR as percentage of price (return-vol proxy) ---}
+if Close <> 0 then
+    ATRpct = ATRv / Close
+else
+    ATRpct = 0;
+
+{--- Baseline ATR% to define "normal" volatility ---}
+ATRpctBase = Average(ATRpct, BaseLen);
+
+{--- ATR deviation score ---
+     This is the MOST IMPORTANT output of the indicator.
+
+     Interpretation:
+       D_ATR = -1.0 → price is 1 ATR below mean
+       D_ATR = -2.7 → strong statistical extreme
+       D_ATR <= -3.5 → panic / liquidation zone
+}
+if ATRv > 0 then
+    D_ATR = (Close - Mean) / ATRv
+else
+    D_ATR = 0;
+
+{====================================================================
+ 2) STRETCH + SHOCK DETECTION
+ ---------------------------------------------------------------------
+ We do NOT fade price just because it is far from the mean.
+ We require CONFIRMATION that the move is emotional / forced.
+====================================================================}
+
+{--- Stretch condition ---
+     Price is sufficiently far below fair value
+}
+Stretch = (D_ATR <= -StretchK);
+
+{--- Shock condition ---
+     At least ONE of the following must occur:
+       A) Large True Range relative to ATR (panic bar)
+       B) Volatility expansion vs historical baseline
+}
+Shock =
+    (TRv >= TRMult * ATRv)
+    or
+    (ATRpctBase > 0 and ATRpct >= ATRpctMult * ATRpctBase);
+
+{====================================================================
+ 3) STALL / EXHAUSTION LOGIC
+ ---------------------------------------------------------------------
+ This block prevents "catching a falling knife".
+
+ Logic:
+   - Stretch + Shock arms the setup
+   - Then we WAIT until selling pressure stops accelerating
+====================================================================}
+
+{--- Arm the setup when stretch + shock appear ---}
+if (Stretch and Shock) then
+begin
+    Pending    = true;    // Enter waiting state
+    ExtremeLow = Low;     // Initialize lowest low tracker
+    StallCount = 0;       // Reset stall counter
+end;
+
+ExtremeDown = false;      // Default: no signal
+
+if Pending then
+begin
+    { Track the lowest low during the extreme move }
+    if Low < ExtremeLow then
+        ExtremeLow = Low;
+
+    { Check for "no meaningful new low"
+      A small marginal low (within tolerance) is allowed }
+    if Low >= (ExtremeLow - StallTolATR * ATRv) then
+        StallCount = StallCount + 1
+    else
+        StallCount = 0;
+
+    { Once price stalls for required bars,
+      selling pressure is considered exhausted }
+    if StallCount >= StallBars then
+    begin
+        ExtremeDown = true;   // SNAPBACK SETUP CONFIRMED
+        Pending     = false;  // Reset state
+        StallCount  = 0;
+    end;
+end;
+
+{====================================================================
+ 4) PLOTTING
+ ---------------------------------------------------------------------
+ Visual tools for analysis and validation
+====================================================================}
+
+{--- Plot ATR deviation score ---}
+Plot1(D_ATR, "D_ATR");
+
+{--- Plot reference levels for context ---}
+Plot2(-StretchK, "Stretch");
+Plot3(-PanicK, "Panic");
+
+{====================================================================
+ 5) TEXT MARKER
+ ---------------------------------------------------------------------
+ Plot a small "x" BELOW the bar when the snapback setup completes.
+ This is the bar where a mean-reversion trader would START looking
+ for an entry on the next bar(s).
+====================================================================}
+
+if ExtremeDown then
+begin
+    Text_New(
+        Date,
+        Time,
+        Low - TextOffsetATR * ATRv,   // offset below bar for visibility
+        "x"
+    );
+end;
