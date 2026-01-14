@@ -155,16 +155,17 @@ ExtremeDown = false;      // Default: no signal
 
 if Pending then
 begin
-    { Track the lowest low during the extreme move }
-    if Low < ExtremeLow then
-        ExtremeLow = Low;
-
-    { Check for "no meaningful new low"
-      A small marginal low (within tolerance) is allowed }
+    { FIX: Check for "no meaningful new low" BEFORE updating ExtremeLow.
+      If we update ExtremeLow first, the condition is always true! }
+    
     if Low >= (ExtremeLow - StallTolATR * ATRv) then
         StallCount = StallCount + 1
     else
         StallCount = 0;
+
+    { Now update the lowest low tracker }
+    if Low < ExtremeLow then
+        ExtremeLow = Low;
 
     { Once price stalls for required bars,
       selling pressure is considered exhausted }
