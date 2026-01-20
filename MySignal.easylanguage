@@ -1245,41 +1245,82 @@ Then Flag_NoEODBuy = False ;
 End;
 
 { ============================================
-  SECTION 21: EXECUTION ENGINE
+  SECTION 21: DYNAMIC EXIT MANAGER
   ============================================ }
 
-{ 21.1: Risk Management (Stop & Trail) }
 If MarketPosition = 1 Then
 Begin
-	{ Routing based on Exit_Strategy_ID }
+	{ Rule 1: Panic Switch - High Volatility }
+	If Volatility_Pct > 5.0 and Exit_Strategy_ID <> 3 Then
+	Begin
+		Exit_Strategy_ID = 3; { Switch to Target/Breakeven }
+		{ print("Manager: Volatility Spike! Switched to ID 3"); }
+	End;
+
+	{ Rule 2: Trend Collapse }
+	If IsStrongBear_1H and Exit_Strategy_ID = 1 Then
+	Begin
+		Exit_Strategy_ID = 2; { Switch to Time/Market Bailout }
+		{ print("Manager: Trend Failed! Switched to ID 2"); }
+	End;
+End;
+
+{ ============================================
+  SECTION 22: EXIT STRATEGY LIBRARY & EXECUTION
+  ============================================ }
+
+{ 22.1: Global Risk Operations (Run for ALL Strategies) }
+If MarketPosition = 1 Then
+Begin
+	{ Initialize Safety Stop if not set }
+	If Stop_Price = 0 Then Stop_Price = EntryPrice * (1 - Input_StopPct);
 	
-	{ Strategy 1: Standard Trailing Stop }
+	{ 22.2: Exit Strategy Logic Router }
+	
+	{ Exit Type 1: Standard Trailing Stop (Trend) }
 	If Exit_Strategy_ID = 1 Then
 	Begin
-		{ Initialize Stop on fresh entry }
-		If Stop_Price = 0 Then Stop_Price = EntryPrice * (1 - Input_StopPct);
-
-		{ Trailing Logic }
 		If Close > EntryPrice * (1 + Input_TrailActivPct) Then 
 		Begin
 			If Close * (1 - Input_TrailCallback) > Stop_Price Then Stop_Price = Close * (1 - Input_TrailCallback);
 		End;
-
-		{ Exit Orders }
-		Sell ("Stop_1") Next Bar at Stop_Price Stop;
+		Sell ("Exit_Trail_1") Next Bar at Stop_Price Stop;
+	End 
+	
+	{ Exit Type 2: Time-Based Exit (Scalp) }
+	Else If Exit_Strategy_ID = 2 Then
+	Begin
+		{ Example: Exit after 10 bars if no profit }
+		If BarsSinceEntry > 10 and Close < EntryPrice * 1.01 Then
+			Sell ("Exit_Time_2") Next Bar at Market;
+			
+		{ Maintain Safety Stop }
+		Sell ("Exit_Safety_2") Next Bar at Stop_Price Stop;
+	End
+	
+	{ Exit Type 3: Profit Target + Breakeven (Breakout) }
+	Else If Exit_Strategy_ID = 3 Then
+	Begin
+		{ Move to Breakeven after 1% profit }
+		If High > EntryPrice * 1.01 and Stop_Price < EntryPrice Then Stop_Price = EntryPrice;
+		
+		{ Target at 3% }
+		Sell ("Exit_Target_3") Next Bar at EntryPrice * 1.03 Limit;
+		Sell ("Exit_Stop_3") Next Bar at Stop_Price Stop;
 	End;
 	
-	{ Strategy 2: Placeholder for Target Exit }
-	If Exit_Strategy_ID = 2 Then
-	Begin
-		If Stop_Price = 0 Then Stop_Price = EntryPrice * (1 - Input_StopPct);
-		Sell ("Stop_2") Next Bar at Stop_Price Stop;
-		{ Add Profit Target logic here later }
-	End;
+	{ Default/Fallback: Just Safety Stop }
+	If Exit_Strategy_ID = 0 Then
+		Sell ("Exit_Safety_0") Next Bar at Stop_Price Stop;
+
 End
 Else Stop_Price = 0;
 
-{ 21.2: Entry Execution }
+{ ============================================
+  SECTION 23: ENTRY EXECUTION ENGINE
+  ============================================ }
+
+{ 23.1: Entry Logic }
 If Date <> Date[1] Then Trade_Count_Today = 0;
 
 If Time < Input_StartTime or Time > Input_EndTime Then
