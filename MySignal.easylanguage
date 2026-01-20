@@ -58,7 +58,7 @@ Inputs:
 	Len_SMA1(21), Len_SMA2(50), Len_SMA3(150), Len_SMA4(200), Len_SMA5(105), 
 	Len_Stoch(14), Len_VolAvg(50),
 	Input_RiskPerTrade(500), Input_StopPct(0.015), Input_TrailActivPct(0.02), Input_TrailCallback(0.005),
-	Input_StartTime(0930), Input_EndTime(1545), Input_MaxTrades(3);
+	Input_StartTime(0930), Input_EndTime(1545), Input_MaxTrades(10), Input_MinEntryInterval(5);
 
 Arrays: 
 	SMASupports[3,4](0), 
@@ -70,7 +70,7 @@ Variables:
 	Num_StartupBar(0), Price_OneTick(MinMove / PriceScale),
 	Factor_Price(0), Temp_Return(0), ID_TrendLine(0), ID_Text(0),
 	Loop_Timeframe(0), Loop_SMA(0), Flag_KDCross(False),
-	Const_BarClosed(2),
+	Const_BarClosed(2), Time_LastEntry(0),
 	
 	{ Thresholds & Limits }
 	Threshold_RangeRatio(0.236),
@@ -1331,7 +1331,11 @@ Else Stop_Price = 0;
   ============================================ }
 
 { 23.1: Entry Logic }
-If Date <> Date[1] Then Trade_Count_Today = 0;
+If Date <> Date[1] Then 
+Begin
+	Trade_Count_Today = 0;
+	Time_LastEntry = 0;
+End;
 
 If Time < Input_StartTime or Time > Input_EndTime Then
 Begin
@@ -1341,6 +1345,14 @@ Begin
 End;
 
 If Trade_Count_Today >= Input_MaxTrades Then
+Begin
+	Entry_Technical = 0;
+	Entry_EOD_HoldRule = 0;
+	Entry_GapDown = 0;
+End;
+
+{ Enforce minimum time interval between entries }
+If TimeToMinutes(Time) - TimeToMinutes(Time_LastEntry) < Input_MinEntryInterval and Time_LastEntry > 0 and Date = Date[1] Then
 Begin
 	Entry_Technical = 0;
 	Entry_EOD_HoldRule = 0;
@@ -1358,6 +1370,7 @@ Begin
 		Stop_Price = 0; { Reset for new trade }
 		Entry_Technical = 0;
 		Trade_Count_Today = Trade_Count_Today + 1;
+		Time_LastEntry = Time;
 	End;
 	
 	If Entry_EOD_HoldRule > 0 Then
@@ -1365,6 +1378,7 @@ Begin
 		Buy ("L_EOD" + NumToStr(Entry_EOD_HoldRule, 0)) Risk_Quantity shares Next Bar at Market;
 		Entry_EOD_HoldRule = 0;
 		Trade_Count_Today = Trade_Count_Today + 1;
+		Time_LastEntry = Time;
 	End;
 	
 	If Entry_GapDown > 0 Then
@@ -1372,6 +1386,7 @@ Begin
 		Buy ("L_Gap" + NumToStr(Entry_GapDown, 0)) Risk_Quantity shares Next Bar at Market;
 		Entry_GapDown = 0;
 		Trade_Count_Today = Trade_Count_Today + 1;
+		Time_LastEntry = Time;
 	End;
 End
 Else
