@@ -70,6 +70,7 @@ Variables:
 	Num_StartupBar(0), Price_OneTick(MinMove / PriceScale),
 	Factor_Price(0), Temp_Return(0), ID_TrendLine(0), ID_Text(0),
 	Loop_Timeframe(0), Loop_SMA(0), Flag_KDCross(False),
+	Const_BarClosed(2),
 	
 	{ Thresholds & Limits }
 	Threshold_RangeRatio(0.236),
@@ -166,6 +167,9 @@ Variables:
 
 	{ Data Proxies - 5 Minute }
 	Open_5M(0), High_5M(0), Low_5M(0), Close_5M(0), Volume_5M(0), Volume_Avg_5M(0), CurrentBar_5M(0),
+	
+	{ Bar Status Proxies }
+	BarStatus_D(0), BarStatus_1H(0), BarStatus_15M(0), BarStatus_5M(0),
 	
 	{ SMA Values - 1 Minute }
 	SMA1_1M(0), SMA2_1M(0), SMA3_1M(0), SMA4_1M(0), SMA5_1M(0),
@@ -282,6 +286,12 @@ Open_5M = Open of Data5; High_5M = High of Data5; Low_5M = Low of Data5; Close_5
 Volume_5M = Volume of Data5; Volume_Avg_1H = Average(Volume_1H, Len_VolAvg) of Data5;
 CurrentBar_5M = CurrentBar of Data5;
 
+	{ Bar Status Initialization }
+	BarStatus_D = BarStatus(2);
+	BarStatus_1H = BarStatus(3);
+	BarStatus_15M = BarStatus(4);
+	BarStatus_5M = BarStatus(5);
+
 { ============================================
   SECTION 3: SMA CALCULATIONS
   ============================================ }
@@ -298,7 +308,7 @@ SMA1_5M = Average(Close_5M, Len_SMA1) ;
 SMA2_5M = Average(Close_5M, Len_SMA2) ;
 SMA3_5M = Average(Close_5M, Len_SMA3) ;
 SMA4_5M = Average(Close_5M, Len_SMA4) ;
-If BarStatus(5) <> 2 Then
+If BarStatus_5M <> Const_BarClosed Then
 Begin
 	SMA1_5M_Cur = (SMA1_5M * Len_SMA1 - Close_5M[Len_SMA1-1] + Close) / Len_SMA1 ;
 	SMA2_5M_Cur = (SMA2_5M * Len_SMA2 - Close_5M[Len_SMA2-1] + Close) / Len_SMA2 ;
@@ -318,7 +328,7 @@ SMA1_15M = Average(Close_15M, Len_SMA1) ;
 SMA2_15M = Average(Close_15M, Len_SMA2) ;
 SMA3_15M = Average(Close_15M, Len_SMA3) ;
 SMA4_15M = Average(Close_15M, Len_SMA4) ;
-If BarStatus(4) <> 2 Then
+If BarStatus_15M <> Const_BarClosed Then
 Begin
 	SMA1_15M_Cur = (SMA1_15M * Len_SMA1 - Close_15M[Len_SMA1-1] + Close) / Len_SMA1 ;
 	SMA2_15M_Cur = (SMA2_15M * Len_SMA2 - Close_15M[Len_SMA2-1] + Close) / Len_SMA2 ;
@@ -338,7 +348,7 @@ SMA1_1H = Average(Close_1H, Len_SMA1) ;
 SMA2_1H = Average(Close_1H, Len_SMA2) ;
 SMA3_1H = Average(Close_1H, Len_SMA3) ;
 SMA4_1H = Average(Close_1H, Len_SMA4) ;
-If BarStatus(3) <> 2 Then
+If BarStatus_1H <> Const_BarClosed Then
 Begin
 	SMA1_1H_Cur = (SMA1_1H * Len_SMA1 - Close_1H[Len_SMA1-1] + Close) / Len_SMA1 ;
 	SMA2_1H_Cur = (SMA2_1H * Len_SMA2 - Close_1H[Len_SMA2-1] + Close) / Len_SMA2 ;
@@ -358,7 +368,7 @@ SMA1_D = Average(Close_D, Len_SMA1) ;
 SMA2_D = Average(Close_D, Len_SMA2) ;
 SMA3_D = Average(Close_D, Len_SMA3) ;
 SMA4_D = Average(Close_D, Len_SMA4) ;
-If BarStatus(2) <> 2 Then
+If BarStatus_D <> Const_BarClosed Then
 Begin
 	SMA1_D_Cur = (SMA1_D * Len_SMA1 - Close_D[Len_SMA1-1] + Close) / Len_SMA1 ;
 	SMA2_D_Cur = (SMA2_D * Len_SMA2 - Close_D[Len_SMA2-1] + Close) / Len_SMA2 ;
@@ -658,7 +668,7 @@ If SMI_15M Cross Above Threshold_SMI_OS then Num_SMICrossUp_15M = CurrentBar_15M
 If SMI_15M Cross Under Threshold_SMI_OB then Num_SMICrossDown_15M = CurrentBar_15M ;
 
 { Stochastic 15-Minute SlowK Cross over SlowD }
-If BarStatus(4) = 2 Then
+If BarStatus_15M = Const_BarClosed Then
 Begin
 	If Stoch_SlowK_15M cross over Stoch_SlowD_15M then Num_KDCrossUp_15M = CurrentBar_15M ;
 End
@@ -666,7 +676,7 @@ Else If Stoch_SlowK_15M < Stoch_SlowD_15M and Stoch_SlowK_15M_Cur > Stoch_SlowD_
 Else Num_KDCrossUp_15M = 0 ;
 
 { Stochastic 15-Minute SlowK Cross under SlowD }
-If BarStatus(4) = 2 Then
+If BarStatus_15M = Const_BarClosed Then
 Begin
 	If Stoch_SlowK_15M cross under Stoch_SlowD_15M then Num_KDCrossDown_15M = CurrentBar_15M ;
 End
@@ -674,7 +684,7 @@ Else If Stoch_SlowK_15M > Stoch_SlowD_15M and Stoch_SlowK_15M_Cur < Stoch_SlowD_
 Else Num_KDCrossDown_15M = 0 ;
 
 { Stochastic 5-Minute SlowK Cross over Oversold }
-If BarStatus(5) = 2 Then
+If BarStatus_5M = Const_BarClosed Then
 Begin
 	If Stoch_SlowK_5M cross over Threshold_Stoch_OS then Num_StochOSCrossUp_5M = CurrentBar_5M ;
 End
@@ -682,7 +692,7 @@ Else If Stoch_SlowK_5M < Threshold_Stoch_OS and Stoch_SlowK_5M_Cur > Threshold_S
 Else Num_StochOSCrossUp_5M = 0 ;
 
 { Stochastic 5-Minute SlowK Cross under Overbought }
-If BarStatus(5) = 2 Then
+If BarStatus_5M = Const_BarClosed Then
 Begin
 	If Stoch_SlowK_5M cross under Threshold_Stoch_OB then Num_StochOBCrossDown_5M = CurrentBar_5M ;
 End
@@ -942,9 +952,9 @@ End ;
 
 { Calculate 15-Minute Oversold Support }
 If SMI_15M_Cur < -40
-	and ((SMI_15M_Cur > SMI_15M and BarStatus(4) <> 2) or (SMI_15M > SMI_15M[1] and BarStatus(4) = 2))
+	and ((SMI_15M_Cur > SMI_15M and BarStatus_15M <> Const_BarClosed) or (SMI_15M > SMI_15M[1] and BarStatus_15M = Const_BarClosed))
 	and Stoch_SlowK_15M_Cur < Threshold_Stoch_OS 
-	and ((Stoch_SlowK_15M_Cur > Stoch_SlowK_15M and BarStatus(4) <> 2) or (Stoch_SlowK_15M > Stoch_SlowK_15M[1] and BarStatus(4) = 2))
+	and ((Stoch_SlowK_15M_Cur > Stoch_SlowK_15M and BarStatus_15M <> Const_BarClosed) or (Stoch_SlowK_15M > Stoch_SlowK_15M[1] and BarStatus_15M = Const_BarClosed))
 	and Range_RecentDay / (Low_RecentDay + 0.000000001) > Threshold_DayDeclinePct
 	and Close - Low_RecentDay < Range_RecentDay * Threshold_MaxRangeRatio
 Then Has_OSSupport_15M = True
@@ -1015,7 +1025,7 @@ Begin
 
 { Calculate Higher Time Frame Long Status }
 Is_SMIBullish_15M = False ; 
-If BarStatus(4) <> 2 Then
+If BarStatus_15M <> Const_BarClosed Then
 Begin
 	If IsBearPhase_15M Then
 	Begin
@@ -1029,7 +1039,7 @@ Begin
 	End
 	Else If SMI_15M_Cur > SMI_15M and SMI_15M > SMI_15M[1] Then Is_SMIBullish_15M = True ;
 End
-Else If BarStatus(4) = 2 Then
+Else If BarStatus_15M = Const_BarClosed Then
 Begin
 	If IsBearPhase_15M Then
 	Begin
@@ -1043,7 +1053,7 @@ Can_EntryLong_HTF = Stoch_SlowK_1H_Cur < Threshold_Stoch_OB
 		and Is_SMA1DistOK_1H
 		and Has_SMA12Sandwich_1H = False
 		and (
-			((SMI_1H_Cur > SMI_1H and BarStatus(3) <> 2) or (SMI_1H > SMI_1H[1] and BarStatus(3) = 2)) 
+			((SMI_1H_Cur > SMI_1H and BarStatus_1H <> Const_BarClosed) or (SMI_1H > SMI_1H[1] and BarStatus_1H = Const_BarClosed)) 
 			or Stoch_SlowK_1H_Cur < 50
 			or Stoch_SlowK_1H_Cur > Stoch_SlowD_1H_Cur
 		)
@@ -1056,10 +1066,10 @@ Can_EntryLong_HTF = Stoch_SlowK_1H_Cur < Threshold_Stoch_OB
 				SMI_15M_Cur < -15
 				and (
 					IsBearPhase_15M = False
-					and ((Stoch_SlowK_15M_Cur > Stoch_SlowK_15M and BarStatus(4) <> 2) or (Stoch_SlowK_15M > Stoch_SlowK_15M[1] and BarStatus(4) = 2))
+					and ((Stoch_SlowK_15M_Cur > Stoch_SlowK_15M and BarStatus_15M <> Const_BarClosed) or (Stoch_SlowK_15M > Stoch_SlowK_15M[1] and BarStatus_15M = Const_BarClosed))
 					and (Stoch_SlowK_15M_Cur < Threshold_Stoch_OS or Stoch_SlowK_15M_Cur > Stoch_SlowD_15M_Cur) 
 					and Stoch_SlowK_15M < Threshold_Stoch_OS
-					and ((SMI_5M_Cur > SMI_5M and BarStatus(5) <> 2) or (SMI_5M > SMI_5M[1] and BarStatus(5) = 2))
+					and ((SMI_5M_Cur > SMI_5M and BarStatus_5M <> Const_BarClosed) or (SMI_5M > SMI_5M[1] and BarStatus_5M = Const_BarClosed))
 					and Close > SMA1_5M_Cur
 					and SMA1_Slope_5M_Cur > 0
 				)
@@ -1372,9 +1382,9 @@ Begin
 End;
 
 { Reset Open/High/Low at bar close }
-If BarStatus(3) = 2 Then Open_1H_Cur = -1 ;
-If BarStatus(4) = 2 Then Open_15M_Cur = -1 ;
-If BarStatus(5) = 2 Then Open_5M_Cur = -1 ;
+If BarStatus_1H = Const_BarClosed Then Open_1H_Cur = -1 ;
+If BarStatus_15M = Const_BarClosed Then Open_15M_Cur = -1 ;
+If BarStatus_5M = Const_BarClosed Then Open_5M_Cur = -1 ;
 
 End;
 
