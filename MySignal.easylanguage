@@ -56,7 +56,9 @@
 Inputs: 
 	Input_AllowLong(True), Input_AllowShort(False),
 	Len_SMA1(21), Len_SMA2(50), Len_SMA3(150), Len_SMA4(200), Len_SMA5(105), 
-	Len_Stoch(14), Len_VolAvg(50);
+	Len_Stoch(14), Len_VolAvg(50),
+	Input_RiskPerTrade(500), Input_StopPct(0.015), Input_TrailActivPct(0.02), Input_TrailCallback(0.005),
+	Input_StartTime(0930), Input_EndTime(1545), Input_MaxTrades(3);
 
 Arrays: 
 	SMASupports[3,4](0), 
@@ -144,6 +146,7 @@ Variables:
 	High_Max_15M(0, Data4), Limit_MaxDrop_15M(0, Data4), Low_Min_15M(0, Data4), Limit_MaxGain_15M(0, Data4),
 	High_Max_1H(0, Data3), Limit_MaxDrop_1H(0, Data3), Low_Min_1H(0, Data3), Limit_MaxGain_1H(0, Data3),
 	High_Max_D(0, Data2), Limit_MaxDrop_D(0, Data2), Low_Min_D(0, Data2), Limit_MaxGain_D(0, Data2),
+	Stop_Price(0), Trail_Price(0), Risk_Quantity(0), Trade_Count_Today(0), Exit_Strategy_ID(0),
 	Open_1H_Cur(-1), High_1H_Cur(0), Low_1H_Cur(0),
 	Open_15M_Cur(-1), High_15M_Cur(0), Low_15M_Cur(0),
 	Open_5M_Cur(-1), High_5M_Cur(0), Low_5M_Cur(0),
@@ -856,9 +859,7 @@ Begin
 			or (Close > SMA2_D_Cur and SMA2_Slope_D_Cur > 0)
 	Then
 	Begin
-		Is_D_BullSlope1_1H = Close > SMA1_1H_Cur and SMA1_Slope_1H_Cur > -15 and SMA1_SlopeROC_1H > SMA1_SlopeROC_1H[1] and SMA1_SlopeROC_1H > 0 ;
-		Is_D_BullSlope2_1H = Close > SMA2_1H_Cur and SMA2_Slope_1H_Cur > -15 and SMA2_SlopeROC_1H > SMA2_SlopeROC_1H[1] and SMA2_SlopeROC_1H > 0 ;
-		Is_D_BullSlope12_1H = Is_D_BullSlope1_1H or Is_D_BullSlope2_1H ;
+
 		If Is_D_BullSlope12_1H Then Can_GoLong = True
 		Else
 		Begin
@@ -890,9 +891,7 @@ Begin
 			or (Close < SMA2_D_Cur and SMA2_Slope_D_Cur < 0)
 	Then
 	Begin
-		Is_D_BearSlope1_1H = Close < SMA1_1H_Cur and SMA1_Slope_1H_Cur < 15 and SMA1_SlopeROC_1H < SMA1_SlopeROC_1H[1] and SMA1_SlopeROC_1H < 0 ;
-		Is_D_BearSlope2_1H = Close < SMA2_1H_Cur and SMA2_Slope_1H_Cur < 15 and SMA2_SlopeROC_1H < SMA2_SlopeROC_1H[1] and SMA2_SlopeROC_1H < 0 ;
-		Is_D_BearSlope12_1H = Is_D_BearSlope1_1H or Is_D_BearSlope2_1H ;
+
 		If Is_D_BearSlope12_1H Then Can_GoShort = True
 		Else
 		Begin
@@ -982,8 +981,32 @@ If	(
 Then Has_BullReversal_15M = True
 Else Has_BullReversal_15M = False ;
 
+{ Calculate 1-Hour Sandwich & Distances }
+If SMA1_1H_Cur > SMA2_1H_Cur
+	and Close > SMA2_1H_Cur
+	and Close < SMA1_1H_Cur
+	and SMA1_Slope_1H < 0
+Then Has_SMA12Sandwich_1H = True
+Else Has_SMA12Sandwich_1H = False ;
+
+If (Close > SMA1_1H_Cur and Close - SMA1_1H_Cur < Limit_MaxDist_1H) or Close < SMA1_1H_Cur
+Then Is_SMA1DistOK_1H = True
+Else Is_SMA1DistOK_1H = False ;
+
+If Close_1H < Close_1H[1] and Close_1H[1] < Close_1H[2] and Close_1H[2] < Close_1H[3] Then Has_ConsecDown_1H = True ;
+If Stoch_SlowK_1H < Threshold_Stoch_OS or Stoch_SlowK_1H > Stoch_SlowD_1H Then Has_ConsecDown_1H = False ;
+
+{ Calculate Daily Bull/Bear Slope Context }
+Is_D_BullSlope1_1H = Close > SMA1_1H_Cur and SMA1_Slope_1H_Cur > -15 and SMA1_SlopeROC_1H > SMA1_SlopeROC_1H[1] and SMA1_SlopeROC_1H > 0 ;
+Is_D_BullSlope2_1H = Close > SMA2_1H_Cur and SMA2_Slope_1H_Cur > -15 and SMA2_SlopeROC_1H > SMA2_SlopeROC_1H[1] and SMA2_SlopeROC_1H > 0 ;
+Is_D_BullSlope12_1H = Is_D_BullSlope1_1H or Is_D_BullSlope2_1H ;
+
+Is_D_BearSlope1_1H = Close < SMA1_1H_Cur and SMA1_Slope_1H_Cur < 15 and SMA1_SlopeROC_1H < SMA1_SlopeROC_1H[1] and SMA1_SlopeROC_1H < 0 ;
+Is_D_BearSlope2_1H = Close < SMA2_1H_Cur and SMA2_Slope_1H_Cur < 15 and SMA2_SlopeROC_1H < SMA2_SlopeROC_1H[1] and SMA2_SlopeROC_1H < 0 ;
+Is_D_BearSlope12_1H = Is_D_BearSlope1_1H or Is_D_BearSlope2_1H ;
+
 { ============================================
-  SECTION 18: LONG ENTRY LOGIC
+  SECTION 18: ENTRY - TREND FOLLOWING (ID 100-199)
   ============================================ }
 
 { If Long is enabled, go ahead }
@@ -1014,20 +1037,6 @@ Begin
 	End
 	Else If SMI_15M > SMI_15M[1] Then Is_SMIBullish_15M = True ;
 End ;
-
-If SMA1_1H_Cur > SMA2_1H_Cur
-	and Close > SMA2_1H_Cur
-	and Close < SMA1_1H_Cur
-	and SMA1_Slope_1H < 0
-Then Has_SMA12Sandwich_1H = True
-Else Has_SMA12Sandwich_1H = False ;
-
-If (Close > SMA1_1H_Cur and Close - SMA1_1H_Cur < Limit_MaxDist_1H) or Close < SMA1_1H_Cur
-Then Is_SMA1DistOK_1H = True
-Else Is_SMA1DistOK_1H = False ;
-
-If Close_1H < Close_1H[1] and Close_1H[1] < Close_1H[2] and Close_1H[2] < Close_1H[3] Then Has_ConsecDown_1H = True ;
-If Stoch_SlowK_1H < Threshold_Stoch_OS or Stoch_SlowK_1H > Stoch_SlowD_1H Then Has_ConsecDown_1H = False ;
 
 Can_EntryLong_HTF = Stoch_SlowK_1H_Cur < Threshold_Stoch_OB
 		and Has_ConsecDown_1H = False
@@ -1125,15 +1134,28 @@ Begin
 		and (SMI_1M < Threshold_SMI_OB or Stoch_SlowK_1M < Threshold_Stoch_OB or Volatility_Pct <= Threshold_VolPctMin) 
 	Then
 	Begin
-		Entry_Technical = 1 ;
+		Entry_Technical = 101 ; { Trend Follow - SMA Deviation }
 		Entry_Timeframe = 0 ;
+		Exit_Strategy_ID = 1 ; { Standard Trailing Stop }
 		print(IM, Volatility_Pct) ;
 	End;
 End
 Else If Close < SMA1_1M Then Flag_PrintSMA14Dev = True ;
 
 { ============================================
-  SECTION 20: END OF MULTIPLE TIMEFRAME BUYING
+  SECTION 19: ENTRY - MEAN REVERSION (ID 200-299)
+  ============================================ }
+
+{ Placeholder for Mean Reversion Strategies }
+
+{ ============================================
+  SECTION 20: ENTRY - BREAKOUT (ID 300-399)
+  ============================================ }
+
+{ Placeholder for Breakout Strategies }
+
+{ ============================================
+  SECTION 20.1: ENTRY - SPECIAL LOGIC (ID 900+)
   ============================================ }
 
 { The following calculate buy orders based on Bullish setup only }
@@ -1158,7 +1180,11 @@ Begin
 		and Close < Maxlist(SMASupports[1, 1], SMASupports[1, 2], SMASupports[1, 3], SMASupports[1, 4])
 		and Close > SMA1_1H_Cur
 		and Close > Close_1H
-	Then Entry_Technical = 3 ;
+	Then 
+	Begin
+		Entry_Technical = 103 ; { Trend Follow - Extreme Oversold }
+		Exit_Strategy_ID = 1 ;
+	End;
 End;
 
 { Buy orders based on Daily Strong Bullish setup only }
@@ -1179,7 +1205,11 @@ Begin
 		and SMI_15M < 0 
 		and Close < Minlist(SMA1_1M, SMA2_1M, SMA3_1M, SMA4_1M)
 		and SMA1_1M - Close > Limit_MaxGainFromLow
-	Then Entry_GapDown = 1 ;
+	Then 
+	Begin
+		Entry_Technical = 901 ; { Special - Gap Down }
+		Exit_Strategy_ID = 2 ; { Example: Target Exit }
+	End;
 End;
 
 { End of Day Buy Rule #1: Must buy when IsStrongBull_Multi is true }
@@ -1215,49 +1245,95 @@ Then Flag_NoEODBuy = False ;
 End;
 
 { ============================================
-  SECTION 21: RESET & ORDER EXECUTION
+  SECTION 21: EXECUTION ENGINE
   ============================================ }
 
-{ Reset Open/High/Low at bar close }
-If BarStatus(3) = 2 Then Open_1H_Cur = -1 ;
-If BarStatus(4) = 2 Then Open_15M_Cur = -1 ;
-If BarStatus(5) = 2 Then Open_5M_Cur = -1 ;
+{ 21.1: Risk Management (Stop & Trail) }
+If MarketPosition = 1 Then
+Begin
+	{ Routing based on Exit_Strategy_ID }
+	
+	{ Strategy 1: Standard Trailing Stop }
+	If Exit_Strategy_ID = 1 Then
+	Begin
+		{ Initialize Stop on fresh entry }
+		If Stop_Price = 0 Then Stop_Price = EntryPrice * (1 - Input_StopPct);
 
-{ Order Execution }
+		{ Trailing Logic }
+		If Close > EntryPrice * (1 + Input_TrailActivPct) Then 
+		Begin
+			If Close * (1 - Input_TrailCallback) > Stop_Price Then Stop_Price = Close * (1 - Input_TrailCallback);
+		End;
+
+		{ Exit Orders }
+		Sell ("Stop_1") Next Bar at Stop_Price Stop;
+	End;
+	
+	{ Strategy 2: Placeholder for Target Exit }
+	If Exit_Strategy_ID = 2 Then
+	Begin
+		If Stop_Price = 0 Then Stop_Price = EntryPrice * (1 - Input_StopPct);
+		Sell ("Stop_2") Next Bar at Stop_Price Stop;
+		{ Add Profit Target logic here later }
+	End;
+End
+Else Stop_Price = 0;
+
+{ 21.2: Entry Execution }
+If Date <> Date[1] Then Trade_Count_Today = 0;
+
+If Time < Input_StartTime or Time > Input_EndTime Then
+Begin
+	Entry_Technical = 0;
+	Entry_EOD_HoldRule = 0;
+	Entry_GapDown = 0;
+End;
+
+If Trade_Count_Today >= Input_MaxTrades Then
+Begin
+	Entry_Technical = 0;
+	Entry_EOD_HoldRule = 0;
+	Entry_GapDown = 0;
+End;
+
 If Time <> SessionEndTime(0,1) Then
 Begin
+	Risk_Quantity = IntPortion(Input_RiskPerTrade / (Close * Input_StopPct));
+	If Risk_Quantity < 1 Then Risk_Quantity = 1;
+
 	If Entry_Technical > 0 Then
 	Begin
-		If Flag_EntryControl = 0 Then
-		Begin
-			If Entry_Timeframe > 0 Then Flag_EntryControl = 1 ;
-			Buy ("T" + NumToStr(Entry_Technical, 0) + "-" + NumToStr(Entry_Timeframe, 0)) next bar at market;
-			Sell ("TS" + NumToStr(Entry_Technical, 0)) next bar at market;
-		End ;
+		Buy ("L_Tech" + NumToStr(Entry_Technical, 0)) Risk_Quantity shares Next Bar at Market;
+		Stop_Price = 0; { Reset for new trade }
 		Entry_Technical = 0;
-	End
-	Else Flag_EntryControl = 0 ;
+		Trade_Count_Today = Trade_Count_Today + 1;
+	End;
 	
 	If Entry_EOD_HoldRule > 0 Then
 	Begin
-		Buy ("H" + NumToStr(Entry_EOD_HoldRule, 0)) next bar at market;
-		Sell ("HS" + NumToStr(Entry_EOD_HoldRule, 0)) next bar at market;
+		Buy ("L_EOD" + NumToStr(Entry_EOD_HoldRule, 0)) Risk_Quantity shares Next Bar at Market;
+		Entry_EOD_HoldRule = 0;
+		Trade_Count_Today = Trade_Count_Today + 1;
 	End;
-	Entry_EOD_HoldRule = 0;
 	
 	If Entry_GapDown > 0 Then
 	Begin
-		Buy ("G" + NumToStr(Entry_GapDown, 0)) next bar at market;
-		Sell ("GS" + NumToStr(Entry_GapDown, 0)) next bar at market;
+		Buy ("L_Gap" + NumToStr(Entry_GapDown, 0)) Risk_Quantity shares Next Bar at Market;
+		Entry_GapDown = 0;
+		Trade_Count_Today = Trade_Count_Today + 1;
 	End;
-	Entry_GapDown = 0;
 End
 Else
 Begin
 	Entry_Technical = 0;
 	Entry_EOD_HoldRule = 0;
 	Entry_GapDown = 0;
-End;	
+End;
+
+{ Reset Open/High/Low at bar close }
+If BarStatus(3) = 2 Then Open_1H_Cur = -1 ;
+If BarStatus(4) = 2 Then Open_15M_Cur = -1 ;
+If BarStatus(5) = 2 Then Open_5M_Cur = -1 ;
 
 End;
 
