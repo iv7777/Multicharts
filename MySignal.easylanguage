@@ -198,21 +198,26 @@ Variables:
 	{ SMA Slopes - 5 Minute }
 	SMA1_Slope_5M(0, Data5), SMA2_Slope_5M(0, Data5), SMA3_Slope_5M(0, Data5), SMA4_Slope_5M(0, Data5),
 	SMA1_Slope_5M_Cur(0), SMA2_Slope_5M_Cur(0), SMA3_Slope_5M_Cur(0), SMA4_Slope_5M_Cur(0),
+	SMA1_SlopeMA_5M(0, Data5), SMA2_SlopeMA_5M(0, Data5), SMA3_SlopeMA_5M(0, Data5), SMA4_SlopeMA_5M(0, Data5),
+	SMA1_SlopeROC_5M(0, Data5), SMA2_SlopeROC_5M(0, Data5), SMA3_SlopeROC_5M(0, Data5), SMA4_SlopeROC_5M(0, Data5),
 	
 	{ SMA Slopes - 15 Minute }
 	SMA1_Slope_15M(0, Data4), SMA2_Slope_15M(0, Data4), SMA3_Slope_15M(0, Data4), SMA4_Slope_15M(0, Data4),
 	SMA1_Slope_15M_Cur(0), SMA2_Slope_15M_Cur(0), SMA3_Slope_15M_Cur(0), SMA4_Slope_15M_Cur(0),
-	SMA1_SlopeROC_15M(0, Data4),
+	SMA1_SlopeMA_15M(0, Data4), SMA2_SlopeMA_15M(0, Data4), SMA3_SlopeMA_15M(0, Data4), SMA4_SlopeMA_15M(0, Data4),
+	SMA1_SlopeROC_15M(0, Data4), SMA2_SlopeROC_15M(0, Data4), SMA3_SlopeROC_15M(0, Data4), SMA4_SlopeROC_15M(0, Data4),
 	
 	{ SMA Slopes - 1 Hour }
 	SMA1_Slope_1H(0, Data3), SMA2_Slope_1H(0, Data3), SMA3_Slope_1H(0, Data3), SMA4_Slope_1H(0, Data3),
 	SMA1_Slope_1H_Cur(0), SMA2_Slope_1H_Cur(0), SMA3_Slope_1H_Cur(0), SMA4_Slope_1H_Cur(0),
-	SMA1_SlopeMA_1H(0, Data3), SMA1_SlopeROC_1H(0, Data3), SMA2_SlopeROC_1H(0, Data3),
+	SMA1_SlopeMA_1H(0, Data3), SMA2_SlopeMA_1H(0, Data3), SMA3_SlopeMA_1H(0, Data3), SMA4_SlopeMA_1H(0, Data3),
+	SMA1_SlopeROC_1H(0, Data3), SMA2_SlopeROC_1H(0, Data3), SMA3_SlopeROC_1H(0, Data3), SMA4_SlopeROC_1H(0, Data3),
 	
 	{ SMA Slopes - Daily }
 	SMA1_Slope_D(0, Data2), SMA2_Slope_D(0, Data2), SMA3_Slope_D(0, Data2), SMA4_Slope_D(0, Data2),
 	SMA1_Slope_D_Cur(0), SMA2_Slope_D_Cur(0), SMA3_Slope_D_Cur(0), SMA4_Slope_D_Cur(0),
-	SMA1_SlopeROC_D(0, Data2),
+	SMA1_SlopeMA_D(0, Data2), SMA2_SlopeMA_D(0, Data2), SMA3_SlopeMA_D(0, Data2), SMA4_SlopeMA_D(0, Data2),
+	SMA1_SlopeROC_D(0, Data2), SMA2_SlopeROC_D(0, Data2), SMA3_SlopeROC_D(0, Data2), SMA4_SlopeROC_D(0, Data2),
 	
 	{ Stochastic - 1 Minute }
 	Stoch_FastK_1M(0), Stoch_FastD_1M(0), Stoch_SlowK_1M(0), Stoch_SlowD_1M(0),
@@ -496,52 +501,106 @@ SMA1_SlopeROC_1M = LinearRegSlopeFC(SMA1_Slope_1M, Len_SMA1) * 10 ;
 SMA2_Slope_1M = CMO(Len_SMA2) ;
 SMA2_SlopeMA_1M = LinearRegValueFC(SMA2_Slope_1M, Len_SMA2, 0) ;
 SMA2_SlopeROC_1M = LinearRegSlopeFC(SMA2_Slope_1M, Len_SMA2) * 25 ;
+{
 SMA3_Slope_1M = CMO(Len_SMA3) ;
 SMA3_SlopeMA_1M = LinearRegValueFC(SMA3_Slope_1M, Len_SMA3, 0) ;
 SMA3_SlopeROC_1M = LinearRegSlopeFC(SMA3_Slope_1M, Len_SMA3) * 75 ;
 SMA4_Slope_1M = CMO(Len_SMA4) ;
 SMA4_SlopeMA_1M = LinearRegValueFC(SMA4_Slope_1M, Len_SMA4, 0) ;
 SMA4_SlopeROC_1M = LinearRegSlopeFC(SMA4_Slope_1M, Len_SMA4) * 100 ;
+}
 
 { 7.2: Daily Slopes }
 SMA1_Slope_D = CMO(Len_SMA1) of Data2 ; 
 SMA1_Slope_D_Cur = MyCMODaily(Len_SMA1) ; 
+SMA1_SlopeMA_D = LinearRegValueFC(SMA1_Slope_D, Len_SMA1, 0) of Data2 ;
+SMA1_SlopeROC_D = LinearRegSlopeFC(SMA1_Slope_D, Len_SMA1) of Data2 * 10 ;
+
 SMA2_Slope_D = CMO(Len_SMA2) of Data2 ; 
 SMA2_Slope_D_Cur = MyCMODaily(Len_SMA2) ;
+SMA2_SlopeMA_D = LinearRegValueFC(SMA2_Slope_D, Len_SMA2, 0) of Data2 ;
+SMA2_SlopeROC_D = LinearRegSlopeFC(SMA2_Slope_D, Len_SMA2) of Data2 * 25 ;
+
+{
 SMA3_Slope_D = CMO(Len_SMA3) of Data2 ; 
 SMA3_Slope_D_Cur = MyCMODaily(Len_SMA3) ; 
+SMA3_SlopeMA_D = LinearRegValueFC(SMA3_Slope_D, Len_SMA3, 0) of Data2 ;
+SMA3_SlopeROC_D = LinearRegSlopeFC(SMA3_Slope_D, Len_SMA3) of Data2 * 75 ;
+
 SMA4_Slope_D = CMO(Len_SMA4) of Data2 ; 
 SMA4_Slope_D_Cur = MyCMODaily(Len_SMA4) ;
+SMA4_SlopeMA_D = LinearRegValueFC(SMA4_Slope_D, Len_SMA4, 0) of Data2 ;
+SMA4_SlopeROC_D = LinearRegSlopeFC(SMA4_Slope_D, Len_SMA4) of Data2 * 100 ;
+}
 
 { 7.3: 1-Hour Slopes }
 SMA1_Slope_1H = CMO(Len_SMA1) of Data3 ;
 SMA1_Slope_1H_Cur = MyCMO60Min(Len_SMA1) ; 
+SMA1_SlopeMA_1H = LinearRegValueFC(SMA1_Slope_1H, Len_SMA1, 0) of Data3 ;
+SMA1_SlopeROC_1H = LinearRegSlopeFC(SMA1_Slope_1H, Len_SMA1) of Data3 * 10 ;
+
 SMA2_Slope_1H = CMO(Len_SMA2) of Data3 ;
 SMA2_Slope_1H_Cur = MyCMO60Min(Len_SMA2) ; 
+SMA2_SlopeMA_1H = LinearRegValueFC(SMA2_Slope_1H, Len_SMA2, 0) of Data3 ;
+SMA2_SlopeROC_1H = LinearRegSlopeFC(SMA2_Slope_1H, Len_SMA2) of Data3 * 25 ;
+
+{
 SMA3_Slope_1H = CMO(Len_SMA3) of Data3 ;
 SMA3_Slope_1H_Cur = MyCMO60Min(Len_SMA3) ; 
+SMA3_SlopeMA_1H = LinearRegValueFC(SMA3_Slope_1H, Len_SMA3, 0) of Data3 ;
+SMA3_SlopeROC_1H = LinearRegSlopeFC(SMA3_Slope_1H, Len_SMA3) of Data3 * 75 ;
+
 SMA4_Slope_1H = CMO(Len_SMA4) of Data3 ;
 SMA4_Slope_1H_Cur = MyCMO60Min(Len_SMA4) ; 
+SMA4_SlopeMA_1H = LinearRegValueFC(SMA4_Slope_1H, Len_SMA4, 0) of Data3 ;
+SMA4_SlopeROC_1H = LinearRegSlopeFC(SMA4_Slope_1H, Len_SMA4) of Data3 * 100 ;
+} 
 
 { 7.4: 15-Minute Slopes }
 SMA1_Slope_15M = CMO(Len_SMA1) of Data4 ;
 SMA1_Slope_15M_Cur = MyCMO15Min(Len_SMA1) ; 
+SMA1_SlopeMA_15M = LinearRegValueFC(SMA1_Slope_15M, Len_SMA1, 0) of Data4 ;
+SMA1_SlopeROC_15M = LinearRegSlopeFC(SMA1_Slope_15M, Len_SMA1) of Data4 * 10 ;
+
 SMA2_Slope_15M = CMO(Len_SMA2) of Data4 ;
 SMA2_Slope_15M_Cur = MyCMO15Min(Len_SMA2) ; 
+SMA2_SlopeMA_15M = LinearRegValueFC(SMA2_Slope_15M, Len_SMA2, 0) of Data4 ;
+SMA2_SlopeROC_15M = LinearRegSlopeFC(SMA2_Slope_15M, Len_SMA2) of Data4 * 25 ;
+
+{
 SMA3_Slope_15M = CMO(Len_SMA3) of Data4 ;
 SMA3_Slope_15M_Cur = MyCMO15Min(Len_SMA3) ; 
+SMA3_SlopeMA_15M = LinearRegValueFC(SMA3_Slope_15M, Len_SMA3, 0) of Data4 ;
+SMA3_SlopeROC_15M = LinearRegSlopeFC(SMA3_Slope_15M, Len_SMA3) of Data4 * 75 ;
+
 SMA4_Slope_15M = CMO(Len_SMA4) of Data4 ;
 SMA4_Slope_15M_Cur = MyCMO15Min(Len_SMA4) ; 
+SMA4_SlopeMA_15M = LinearRegValueFC(SMA4_Slope_15M, Len_SMA4, 0) of Data4 ;
+SMA4_SlopeROC_15M = LinearRegSlopeFC(SMA4_Slope_15M, Len_SMA4) of Data4 * 100 ;
+} 
 
 { 7.5: 5-Minute Slopes }
 SMA1_Slope_5M = CMO(Len_SMA1) of Data5 ;
 SMA1_Slope_5M_Cur = MyCMO5Min(Len_SMA1) ; 
+SMA1_SlopeMA_5M = LinearRegValueFC(SMA1_Slope_5M, Len_SMA1, 0) of Data5 ;
+SMA1_SlopeROC_5M = LinearRegSlopeFC(SMA1_Slope_5M, Len_SMA1) of Data5 * 10 ;
+
 SMA2_Slope_5M = CMO(Len_SMA2) of Data5 ;
 SMA2_Slope_5M_Cur = MyCMO5Min(Len_SMA2) ; 
+SMA2_SlopeMA_5M = LinearRegValueFC(SMA2_Slope_5M, Len_SMA2, 0) of Data5 ;
+SMA2_SlopeROC_5M = LinearRegSlopeFC(SMA2_Slope_5M, Len_SMA2) of Data5 * 25 ;
+
+{
 SMA3_Slope_5M = CMO(Len_SMA3) of Data5 ;
 SMA3_Slope_5M_Cur = MyCMO5Min(Len_SMA3) ; 
+SMA3_SlopeMA_5M = LinearRegValueFC(SMA3_Slope_5M, Len_SMA3, 0) of Data5 ;
+SMA3_SlopeROC_5M = LinearRegSlopeFC(SMA3_Slope_5M, Len_SMA3) of Data5 * 75 ;
+
 SMA4_Slope_5M = CMO(Len_SMA4) of Data5 ;
-SMA4_Slope_5M_Cur = MyCMO5Min(Len_SMA4) ;
+SMA4_Slope_5M_Cur = MyCMO5Min(Len_SMA4) ; 
+SMA4_SlopeMA_5M = LinearRegValueFC(SMA4_Slope_5M, Len_SMA4, 0) of Data5 ;
+SMA4_SlopeROC_5M = LinearRegSlopeFC(SMA4_Slope_5M, Len_SMA4) of Data5 * 100 ;
+}
 
 { ============================================
   SECTION 8: MULTI-TIMEFRAME CALCULATIONS
@@ -571,9 +630,7 @@ End ;
 Range_RecentDay = High_RecentDay - Low_RecentDay ;
 
 { Calculate Higher Time Frame Slope Smooth and Smooth Slope }
-SMA1_SlopeMA_1H = LinearRegValueFC(SMA1_Slope_1H, Len_SMA1, 0) ;
-SMA1_SlopeROC_1H = LinearRegSlopeFC(SMA1_Slope_1H, Len_SMA1) * 10 ;
-SMA2_SlopeROC_1H = LinearRegSlopeFC(SMA2_Slope_1H, Len_SMA1) * 10 ;
+{ SMA1_SlopeMA_1H etc moved to Section 7 }
 
 { Stochastic Momentum Index for Higher Time Frames }
 SMI_1H = SMI(Len_SMI1, Len_SMI2, Len_SMI3) of Data3 ;
