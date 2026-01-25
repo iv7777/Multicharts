@@ -1,6 +1,24 @@
 { ================================================
   PROJECT MORPHEUS - MULTI-TIMEFRAME SIGNAL
+  ================================================ 
+  
+  *** VISUAL DEBUG MODE TOGGLE ***
+  Use Input_VisualDebugMode to switch modes:
+  - TRUE = Visual Debug Mode (no trades, shows markers)
+  - FALSE = Live Trading Mode (executes trades)
+  
+  Visual markers when Input_VisualDebugMode = TRUE:
+  - ENTRY_XXX (Cyan) = Technical entry signals
+  - EOD_X (Yellow) = End of day entries  
+  - GAP_X (Magenta) = Gap down entries
+  - Red trendlines = Stop levels
+  - Green trendlines = Target levels
+  - TIME_EXIT (Magenta) = Time-based exit trigger
+  
+  Simply change the input parameter to toggle modes!
   ================================================ }
+
+
 
   { MultiCharts data series current assignment
 	Data1 = Primary chart (1-minute)
@@ -10,12 +28,14 @@
 	Data5 = Fourth additional series (5-min) }
 
 Inputs: 
+	Input_VisualDebugMode(True),
 	Input_AllowLong(True), Input_AllowShort(False), Input_AllowMeanReversion(True),
 	Len_SMA1(21), Len_SMA2(50), Len_SMA3(150), Len_SMA4(200), Len_SMA5(105), 
 	Len_Stoch(14), Len_VolAvg(50),
 	Input_RiskPerTrade(500), Input_StopPct(0.015), Input_TrailActivPct(0.02), Input_TrailCallback(0.005),
 	Input_StartTime(0930), Input_EndTime(1545), Input_MaxTrades(10), Input_MinEntryInterval(5),
 	Threshold_PanicDecline(0.06);
+
 
 Arrays: 
 	SMASupports[3,4](0), 
@@ -1394,7 +1414,15 @@ Begin
 		Begin
 			If Close * (1 - Input_TrailCallback) > Stop_Price Then Stop_Price = Close * (1 - Input_TrailCallback);
 		End;
-		Sell ("Exit_Trail_1") Next Bar at Stop_Price Stop;
+		
+		If Input_VisualDebugMode Then
+		Begin
+			{ Visual: Draw stop level }
+			Value1 = TL_SetEnd(ID_TrendLine, Date, Time, Stop_Price);
+			Value1 = TL_SetColor(ID_TrendLine, Red);
+		End
+		Else
+			Sell ("Exit_Trail_1") Next Bar at Stop_Price Stop;
 	End 
 	
 	{ Exit Type 2: Time-Based Exit (Scalp) }
@@ -1402,10 +1430,24 @@ Begin
 	Begin
 		{ Example: Exit after 10 bars if no profit }
 		If BarsSinceEntry > 10 and Close < EntryPrice * 1.01 Then
-			Sell ("Exit_Time_2") Next Bar at Market;
+		Begin
+			If Input_VisualDebugMode Then
+			Begin
+				Value1 = Text_New(Date, Time, High * 1.01, "TIME_EXIT");
+				Value1 = Text_SetColor(Value1, Magenta);
+			End
+			Else
+				Sell ("Exit_Time_2") Next Bar at Market;
+		End;
 			
 		{ Maintain Safety Stop }
-		Sell ("Exit_Safety_2") Next Bar at Stop_Price Stop;
+		If Input_VisualDebugMode Then
+		Begin
+			Value1 = TL_SetEnd(ID_TrendLine, Date, Time, Stop_Price);
+			Value1 = TL_SetColor(ID_TrendLine, Red);
+		End
+		Else
+			Sell ("Exit_Safety_2") Next Bar at Stop_Price Stop;
 	End
 	
 	{ Exit Type 3: Profit Target + Breakeven (Breakout) }
@@ -1414,14 +1456,32 @@ Begin
 		{ Move to Breakeven after 1% profit }
 		If High > EntryPrice * 1.01 and Stop_Price < EntryPrice Then Stop_Price = EntryPrice;
 		
-		{ Target at 3% }
-		Sell ("Exit_Target_3") Next Bar at EntryPrice * 1.03 Limit;
-		Sell ("Exit_Stop_3") Next Bar at Stop_Price Stop;
+		If Input_VisualDebugMode Then
+		Begin
+			{ Visual: Draw target and stop levels }
+			ID_Text = TL_New(Date, Time, EntryPrice * 1.03, Date[1], Time[1], EntryPrice * 1.03);
+			Value1 = TL_SetColor(ID_Text, Green);
+			Value1 = TL_SetEnd(ID_TrendLine, Date, Time, Stop_Price);
+			Value1 = TL_SetColor(ID_TrendLine, Red);
+		End
+		Else
+		Begin
+			Sell ("Exit_Target_3") Next Bar at EntryPrice * 1.03 Limit;
+			Sell ("Exit_Stop_3") Next Bar at Stop_Price Stop;
+		End;
 	End;
 	
 	{ Default/Fallback: Just Safety Stop }
 	If Exit_Strategy_ID = 0 Then
-		Sell ("Exit_Safety_0") Next Bar at Stop_Price Stop;
+	Begin
+		If Input_VisualDebugMode Then
+		Begin
+			Value1 = TL_SetEnd(ID_TrendLine, Date, Time, Stop_Price);
+			Value1 = TL_SetColor(ID_TrendLine, Red);
+		End
+		Else
+			Sell ("Exit_Safety_0") Next Bar at Stop_Price Stop;
+	End;
 
 End
 Else Stop_Price = 0;
@@ -1466,7 +1526,21 @@ Begin
 
 	If Entry_Technical > 0 Then
 	Begin
-		Buy ("L_Tech" + NumToStr(Entry_Technical, 0)) Risk_Quantity shares Next Bar at Market;
+		If Input_VisualDebugMode Then
+		Begin
+			{ Visual: Draw entry marker }
+			ID_Text = Text_New(Date, Time, Low * 0.998, "ENTRY_" + NumToStr(Entry_Technical, 0));
+			Value1 = Text_SetColor(ID_Text, Cyan);
+			Value1 = Text_SetStyle(ID_Text, 1, 1);
+			
+			{ Visual: Draw entry arrow }
+			ID_TrendLine = TL_New(Date, Time, Low * 0.999, Date, Time, Low * 0.995);
+			Value1 = TL_SetColor(ID_TrendLine, Cyan);
+			Value1 = TL_SetSize(ID_TrendLine, 2);
+		End
+		Else
+			Buy ("L_Tech" + NumToStr(Entry_Technical, 0)) Risk_Quantity shares Next Bar at Market;
+		
 		Stop_Price = 0; { Reset for new trade }
 		Entry_Technical = 0;
 		Trade_Count_Today = Trade_Count_Today + 1;
@@ -1475,7 +1549,16 @@ Begin
 	
 	If Entry_EOD_HoldRule > 0 Then
 	Begin
-		Buy ("L_EOD" + NumToStr(Entry_EOD_HoldRule, 0)) Risk_Quantity shares Next Bar at Market;
+		If Input_VisualDebugMode Then
+		Begin
+			{ Visual: Draw EOD entry marker }
+			ID_Text = Text_New(Date, Time, Low * 0.998, "EOD_" + NumToStr(Entry_EOD_HoldRule, 0));
+			Value1 = Text_SetColor(ID_Text, Yellow);
+			Value1 = Text_SetStyle(ID_Text, 1, 1);
+		End
+		Else
+			Buy ("L_EOD" + NumToStr(Entry_EOD_HoldRule, 0)) Risk_Quantity shares Next Bar at Market;
+		
 		Entry_EOD_HoldRule = 0;
 		Trade_Count_Today = Trade_Count_Today + 1;
 		Time_LastEntry = Time;
@@ -1483,7 +1566,16 @@ Begin
 	
 	If Entry_GapDown > 0 Then
 	Begin
-		Buy ("L_Gap" + NumToStr(Entry_GapDown, 0)) Risk_Quantity shares Next Bar at Market;
+		If Input_VisualDebugMode Then
+		Begin
+			{ Visual: Draw gap entry marker }
+			ID_Text = Text_New(Date, Time, Low * 0.998, "GAP_" + NumToStr(Entry_GapDown, 0));
+			Value1 = Text_SetColor(ID_Text, Magenta);
+			Value1 = Text_SetStyle(ID_Text, 1, 1);
+		End
+		Else
+			Buy ("L_Gap" + NumToStr(Entry_GapDown, 0)) Risk_Quantity shares Next Bar at Market;
+		
 		Entry_GapDown = 0;
 		Trade_Count_Today = Trade_Count_Today + 1;
 		Time_LastEntry = Time;
