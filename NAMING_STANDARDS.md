@@ -1,110 +1,153 @@
-# Project Morpheus Naming Standards
+# Project Morpheus - Naming Standards
 
 ## Timeframe Suffixes
-- `_1M` = 1-minute
-- `_5M` = 5-minute  
-- `_15M` = 15-minute
-- `_1H` = 1-hour
-- `_D` = Daily
+
+All multi-timeframe variables use consistent suffixes:
+
+- `_1M` = 1-minute (current chart - Data1)
+- `_5M` = 5-minute (Data5)
+- `_15M` = 15-minute (Data4)
+- `_1H` = 1-hour (Data3)
+- `_D` = Daily (Data2)
+
+## Current Bar Suffix
+
+- `_Cur` = Current bar calculation (vs historical closed bar)
+
+**Example**: `SMA1_1H` = closed 1-hour bar, `SMA1_1H_Cur` = current updating 1-hour bar
 
 ## Variable Prefixes
-### Boolean Flags
-- `Is` = State/condition (IsBullPhase_D)
-- `Has` = Occurrence (Has_GapDown)
-- `Can` = Permission (Can_GoLong)
 
-### Numeric
-- `Count_` = Counter variable
-- `Num_` = Number/index  
-- `Threshold_` = Fixed threshold
-- `Coeff_` = Calculation coefficient
-- `Limit_` = Calculated limit
-- `Len_` = Length parameter
+### Boolean Flags
+
+- `Is` = State/condition
+  - Examples: `IsBullPhase_D`, `IsStrongBull_1H`, `Is_SMAStranded`
+- `Has` = Occurrence/event
+  - Examples: `Has_GapDown`, `Has_OSSupport_15M`, `Has_SharpDecline_D`
+- `Can` = Permission/capability
+  - Examples: `Can_GoLong`, `Can_TrendLong`, `Can_CounterLong`
+
+### Numeric Variables
+
+- `Count_` = Counter variable (incremental)
+  - Examples: `Count_AboveSMA1_1M`, `Count_CloseHigher`
+- `Num_` = Number/index (specific value or bar number)
+  - Examples: `Num_KDCrossUp_15M`, `Num_HighBar`, `Num_StartupBar`
+- `Threshold_` = Fixed threshold value
+  - Examples: `Threshold_Stoch_OB`, `Threshold_PanicDecline`
+- `Coeff_` = Calculation coefficient (multiplier)
+  - Examples: `Coeff_MaxDistSMA12`, `Coeff_MinDevSMA14_D`
+- `Limit_` = Calculated limit (derived from coefficient)
+  - Examples: `Limit_MaxDistSMA12_1M`, `Limit_MinDevSMA14_D`
+- `Len_` = Length parameter for indicators
+  - Examples: `Len_SMA1`, `Len_Stoch`, `Len_SMI1`
 
 ### Price/Market Data
-- `High_`, `Low_`, `Open_`, `Close_`
-- `Range_`, `Volume_`
 
-PROJECT: Multi-Timeframe Trading Strategy - "Project Morpheus"
+- `High_`, `Low_`, `Open_`, `Close_` = OHLC data
+  - Examples: `High_RecentDay`, `Low_Cycle_1M`, `Close_D`
+- `Range_` = Price range
+  - Examples: `Range_RecentDay`, `Avg_PriceRange`
+- `Volume_` = Volume data
+  - Examples: `Volume_D`, `Volume_Avg_1H`
 
-TECHNICAL SETUP:
-- Platform: MultiCharts 64-bit [version]
-- Language: PowerLanguage (EasyLanguage variant)
-- Primary Execution: 1-minute bars (Data1)
-- Data Series:
-  * Data1: 1-minute (current chart, execution timeframe)
-  * Data2: Daily (trend filter)
-  * Data3: 60-minute (intermediate trend)
-  * Data4: 15-minute (entry refinement)
-  * Data5: 5-minute (fine-tuning)
+### Indicator Components
 
-NAMING CONVENTIONS (Project Morpheus Standards):
-- Timeframe suffixes: _1M, _5M, _15M, _1H, _D
-- Current bar suffix: _Cur (e.g., SMA1_1H_Cur)
-- Boolean flags: Is/Has/Can prefixes
-- Counters: Count_ prefix
-- Thresholds: Threshold_ prefix
-- Coefficients: Coeff_ prefix
-- Calculated limits: Limit_ prefix
-- See attached NAMING_STANDARDS.md for full details
+Pattern: `Indicator_Component_Timeframe[_Cur]`
 
-CODE ORGANIZATION:
-- Section headers with clear separation
-- Comments explaining complex logic
-- Functions for repeated calculations
-- See attached strategy code for current architecture
+**SMA Examples**:
+- `SMA1_1H` = SMA(21) on 1-hour closed bar
+- `SMA2_15M_Cur` = SMA(50) on current 15-minute bar
+- `SMA1_Slope_D` = Slope of SMA1 on Daily
+- `SMA1_SlopeMA_1H` = Smoothed slope of SMA1 on 1-hour
+- `SMA1_SlopeROC_15M` = Rate of change of SMA1 slope on 15-minute
 
-POWERLANGUAGE SPECIFICS TO REMEMBER:
-- Begin/End blocks (not braces)
-- Semicolon required at end of statements
-- Arrays are 1-indexed
-- "of DataX" syntax for multi-data access
-- BarStatus: 0=historical, 1=updating, 2=closed
-- Functions return single value only
-- No recursion allowed
-- Case-insensitive but capitalize keywords
+**Stochastic Examples**:
+- `Stoch_SlowK_15M` = Stochastic SlowK on 15-minute
+- `Stoch_SlowD_1H_Cur` = Stochastic SlowD on current 1-hour bar
 
-WHEN HELPING ME:
-1. Always validate PowerLanguage syntax compatibility
-2. Follow Project Morpheus naming standards
-3. Maintain existing code architecture unless I request changes
-4. Add section comments when creating new code blocks
-5. Flag any potential look-ahead bias or BarStatus issues
-6. Suggest testing approaches for changes
-7. Balance readability with performance
+**SMI Examples**:
+- `SMI_1H` = Stochastic Momentum Index on 1-hour
+- `SMI_15M_Cur` = SMI on current 15-minute bar
 
-RESPONSE FORMAT:
-- Brief summary (what does this do?)
-- Complete, compilable code
-- Key changes/additions explained
-- Testing recommendations
-- Any warnings or considerations
+### Entry/Exit Variables
 
-MY PREFERENCES:
-- Verbose comments for complex logic
-- Descriptive variable names (not Value1, Value2)
-- Explicit over implicit
-- Explain trade-offs when there are multiple approaches
+- `Entry_` = Entry signal variables
+  - Examples: `Entry_Technical`, `Entry_Timeframe`, `Entry_GapDown`
+- `Exit_` = Exit management
+  - Examples: `Exit_Strategy_ID`
+- `Flag_` = Control flags
+  - Examples: `Flag_PrintSMA14Dev`, `Flag_NoEODBuy`
+
+### Data Proxies
+
+To avoid repeated `BarStatus(X)` calls, use data proxy variables:
+
+```
+Open_D = Open of Data2
+High_D = High of Data2
+Low_D = Low of Data2
+Close_D = Close of Data2
+Volume_D = Volume of Data2
+CurrentBar_D = CurrentBar of Data2
+BarStatus_D = BarStatus(2)
 ```
 
-**📄 STRATEGY_CODE.txt**
+## Naming Pattern Examples
+
+### Good Examples ✅
 ```
-[Your complete refactored strategy code]
+IsBullPhase_D           // Boolean state on Daily
+Can_TrendLong           // Permission for trend-following long
+Has_SharpDecline_D      // Occurrence flag on Daily
+Count_AboveSMA1_1M      // Counter on 1-minute
+Num_KDCrossUp_15M       // Bar number of cross on 15-minute
+SMA1_Slope_1H_Cur       // Current slope on 1-hour
+Threshold_PanicDecline  // Fixed threshold
+Limit_MaxDist_D         // Calculated limit on Daily
 ```
 
-**📄 CUSTOM_FUNCTIONS.txt**
+### Bad Examples ❌
 ```
-List of custom functions used:
-- MyCMODaily(Length)
-- MyCMO60Min(Length)  
-- MyCMO15Min(Length)
-- MyCMO5Min(Length)
-- MySMI60Min(Len1, Len2, Len3)
-- MySMI15Min(Len1, Len2, Len3)
-- MySMI5Min(Len1, Len2, Len3)
-- MyStochasticDaily(...)
-- MyStochastic60Min(...)
-- MyStochastic15Min(...)
-- MyStochastic5Min(...)
+Value1, Value2          // Not descriptive
+BullPhase               // Missing timeframe suffix
+SMA_1H                  // Missing number (SMA1, SMA2, etc.)
+CrossBar                // Missing timeframe and indicator
+MaxDist                 // Missing timeframe
+```
 
-[Include function code if you want Claude to reference it]
+## Code Organization Principles
+
+### Section Headers
+Use clear section headers with separators:
+```
+{ ============================================
+  SECTION X: DESCRIPTIVE NAME
+  ============================================ }
+```
+
+### Variable Grouping
+Group related variables with comment headers:
+```
+{ System & Control }
+{ Thresholds & Limits }
+{ Phase Detection Flags }
+{ SMA Values - 1 Minute }
+```
+
+### Comments
+- Use inline comments for complex logic
+- Explain WHY, not just WHAT
+- Document assumptions and edge cases
+
+### Consistency
+- Always use the same pattern for similar variables across timeframes
+- If you have `SMA1_1M`, also use `SMA1_5M`, `SMA1_15M`, `SMA1_1H`, `SMA1_D`
+- Keep indicator component order consistent: `Indicator_Component_Timeframe[_Cur]`
+
+## PowerLanguage Specifics
+
+- **Case Insensitive**: PowerLanguage is case-insensitive, but capitalize keywords for readability
+- **Descriptive Over Terse**: Use `Count_AboveSMA1_1M` instead of `Cnt1M`
+- **No Reserved Words**: Avoid `Value1`, `Value2` except for temporary calculations
+- **Explicit Over Implicit**: `Close_D` is clearer than `Close of Data2` in logic

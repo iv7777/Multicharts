@@ -1,57 +1,13 @@
 { ================================================
-  PROJECT MORPHEUS - MULTI-TIMEFRAME STRATEGY
-  Variable Naming Standards
-  ================================================
+  PROJECT MORPHEUS - MULTI-TIMEFRAME SIGNAL
+  ================================================ }
 
-  TIMEFRAME SUFFIXES:
-  _1M  = 1-minute (current chart - Data1)
-  _5M  = 5-minute (Data5)
-  _15M = 15-minute (Data4)
-  _1H  = 1-hour (Data3)
-  _D   = Daily (Data2)
-
-  CURRENT BAR SUFFIX:
-  _Cur = Current bar calculation (vs historical closed bar)
-  
-  BOOLEAN PREFIXES:
-  Is   = State/condition (IsBullPhase_D)
-  Has  = Occurrence (HasGapDown)
-  Can  = Permission (CanGoLong)
-  
-  NUMERIC PREFIXES:
-  Max/Min       = Thresholds/limits
-  Coeff         = Calculation coefficient
-  Pct           = Percentage value
-  Count         = Counter variable
-  Num           = Number/index
-  Threshold     = Fixed threshold value
-  
-  NAMING PATTERN:
-  Indicator_Component_Timeframe[_Cur]
-  
-  EXAMPLES:
-  SMA1_1H           = SMA(21) on 1-hour timeframe (closed bar)
-  SMA1_1H_Cur       = SMA(21) on 1-hour (current bar)
-  Stoch_SlowK_15M   = Stochastic SlowK on 15-minute
-  IsBullPhase_D     = Boolean: Is daily timeframe in bull phase?
-  Count_BarsAboveSMA1 = Counter: Consecutive bars above SMA1 
-================================================ }
-
-{ ================================================
-  PROJECT MORPHEUS - MULTI-TIMEFRAME STRATEGY
-  MultiCharts data series current assignment
-  ================================================
-
+  { MultiCharts data series current assignment
 	Data1 = Primary chart (1-minute)
 	Data2 = First additional series (Daily)
 	Data3 = Second additional series (60-min)
 	Data4 = Third additional series (15-min)
 	Data5 = Fourth additional series (5-min) }
-
-{ ================================================
-  PROJECT MORPHEUS - MULTI-TIMEFRAME STRATEGY
-  Variable Naming Standards - See Header Above
-  ================================================ }
 
 Inputs: 
 	Input_AllowLong(True), Input_AllowShort(False), Input_AllowMeanReversion(True),
