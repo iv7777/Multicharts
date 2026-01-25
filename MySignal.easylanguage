@@ -54,11 +54,12 @@
   ================================================ }
 
 Inputs: 
-	Input_AllowLong(True), Input_AllowShort(False),
+	Input_AllowLong(True), Input_AllowShort(False), Input_AllowMeanReversion(True),
 	Len_SMA1(21), Len_SMA2(50), Len_SMA3(150), Len_SMA4(200), Len_SMA5(105), 
 	Len_Stoch(14), Len_VolAvg(50),
 	Input_RiskPerTrade(500), Input_StopPct(0.015), Input_TrailActivPct(0.02), Input_TrailCallback(0.005),
-	Input_StartTime(0930), Input_EndTime(1545), Input_MaxTrades(10), Input_MinEntryInterval(5);
+	Input_StartTime(0930), Input_EndTime(1545), Input_MaxTrades(10), Input_MinEntryInterval(5),
+	Threshold_PanicDecline(0.06);
 
 Arrays: 
 	SMASupports[3,4](0), 
@@ -118,9 +119,11 @@ Variables:
 	Is_D_BullSlope12_1H(False), Is_D_BullSlope1_1H(False), Is_D_BullSlope2_1H(False),
 	Is_SMIBearish_15M(False), Is_SMIBullish_15M(False),
 	Can_EntryLong_HTF(False), Can_GoLong(False), Can_GoShort(False),
+	Can_TrendLong(False), Can_TrendShort(False), Can_CounterLong(False), Can_CounterShort(False),
 	Has_GapDown(False), Has_OSSupport_15M(False), Has_QuickOS_1H(False),
 	Has_BullReversal_15M(False), Has_BullishClose(False),
 	Has_TightSupport_1H(False), Has_TightSupport_D(False),
+	Has_SharpDecline_D(False),
 	Is_SMAStranded(False), Is_NotFirstDown(True),
 	
 	{ Bar Counters }
@@ -906,31 +909,31 @@ IsBearPhaseSMA3 = SMA3_SlopeROC_1M < SMA3_SlopeROC_1M[1] or SMA3_SlopeROC_1M < 0
   SECTION 16: LONG/SHORT PERMISSION LOGIC
   ============================================ }
 
-{ Decide Long or Short are allowed }
-Can_GoLong = False;
-Can_GoShort = False;
+{ Decide Long or Short are allowed - TREND FOLLOWING }
+Can_TrendLong = False;
+Can_TrendShort = False;
 If IsStrongBull_Multi then
 Begin
-	Can_GoLong = True;
-	Can_GoShort = False;
+	Can_TrendLong = True;
+	Can_TrendShort = False;
 End
 Else If IsStrongBear_Multi then
 Begin
-	Can_GoLong = False;
-	Can_GoShort = True;
+	Can_TrendLong = False;
+	Can_TrendShort = True;
 End
 Else
 Begin
-	If IsBullPhase_1H or (Close > SMA1_1H_Cur and SMA1_Slope_1H_Cur > 0) or (Close > SMA2_1H_Cur and SMA2_Slope_1H_Cur > 0) Then Can_GoLong = True
+	If IsBullPhase_1H or (Close > SMA1_1H_Cur and SMA1_Slope_1H_Cur > 0) or (Close > SMA2_1H_Cur and SMA2_Slope_1H_Cur > 0) Then Can_TrendLong = True
 	Else If IsBullPhase_D or (Close > SMA1_D_Cur and SMA1_Slope_D_Cur > 0)
 			or (Close > SMA2_D_Cur and SMA2_Slope_D_Cur > 0)
 	Then
 	Begin
 
-		If Is_D_BullSlope12_1H Then Can_GoLong = True
+		If Is_D_BullSlope12_1H Then Can_TrendLong = True
 		Else
 		Begin
-			If IsBullPhase_15M Then Can_GoLong = True
+			If IsBullPhase_15M Then Can_TrendLong = True
 			Else
 			Begin
 				Low_Min_15M = LowestFC(Low_15M, 4);
@@ -948,21 +951,21 @@ Begin
 						(Close > SMA2_15M_Cur and SMA2_Slope_15M_Cur > 0)	
 						and (Limit_MaxGain_15M > SMA2_15M_Cur - Low_Min_15M or Count_AboveSMA2_15M > 2)
 					)
-				Then Can_GoLong = True ;
+				Then Can_TrendLong = True ;
 			End;
 		End;
 	End;	
 
-	If IsBearPhase_1H or (Close < SMA1_1H_Cur and SMA1_Slope_1H_Cur < 0) or (Close < SMA2_1H_Cur and SMA2_Slope_1H_Cur < 0) Then Can_GoShort = True
+	If IsBearPhase_1H or (Close < SMA1_1H_Cur and SMA1_Slope_1H_Cur < 0) or (Close < SMA2_1H_Cur and SMA2_Slope_1H_Cur < 0) Then Can_TrendShort = True
 	Else If IsBearPhase_D or (Close < SMA1_D_Cur and SMA1_Slope_D_Cur < 0)
 			or (Close < SMA2_D_Cur and SMA2_Slope_D_Cur < 0)
 	Then
 	Begin
 
-		If Is_D_BearSlope12_1H Then Can_GoShort = True
+		If Is_D_BearSlope12_1H Then Can_TrendShort = True
 		Else
 		Begin
-			If IsBearPhase_15M Then Can_GoShort = True
+			If IsBearPhase_15M Then Can_TrendShort = True
 			Else
 			Begin
 				High_Max_15M = HighestFC(High_15M, 4);
@@ -980,11 +983,15 @@ Begin
 						(Close > SMA2_15M_Cur and SMA2_Slope_15M_Cur > 0)	
 						and (Limit_MaxDrop_15M > High_Max_15M - SMA2_15M_Cur or Count_UnderSMA2_15M > 2)
 					)
-				Then Can_GoShort = True ;
+				Then Can_TrendShort = True ;
 			End;		
 		End;
 	End;
 End;
+
+{ Composite Permissions - Combine Trend & Counter-Trend Strategies }
+Can_GoLong = (Can_TrendLong and Input_AllowLong) or (Can_CounterLong and Input_AllowMeanReversion and Input_AllowLong);
+Can_GoShort = (Can_TrendShort and Input_AllowShort) or (Can_CounterShort and Input_AllowMeanReversion and Input_AllowShort);
 
 If IsBullPhase_D = False
 	and Count_AboveSMA1_1H <= 3
@@ -1071,6 +1078,36 @@ Is_D_BullSlope12_1H = Is_D_BullSlope1_1H or Is_D_BullSlope2_1H ;
 Is_D_BearSlope1_1H = Close < SMA1_1H_Cur and SMA1_Slope_1H_Cur < 15 and SMA1_SlopeROC_1H < SMA1_SlopeROC_1H[1] and SMA1_SlopeROC_1H < 0 ;
 Is_D_BearSlope2_1H = Close < SMA2_1H_Cur and SMA2_Slope_1H_Cur < 15 and SMA2_SlopeROC_1H < SMA2_SlopeROC_1H[1] and SMA2_SlopeROC_1H < 0 ;
 Is_D_BearSlope12_1H = Is_D_BearSlope1_1H or Is_D_BearSlope2_1H ;
+
+{ Calculate Sharp Decline on Daily Timeframe - Counter-Trend Trigger }
+Can_CounterLong = False;
+Can_CounterShort = False;
+
+{ Detect "Panic Selling" conditions on Daily chart that may lead to violent bounce }
+Has_SharpDecline_D = False;
+If Close_D < Close_D[1] 
+	and (Close_D - Low_D) / Close_D < 0.02  { Close near low of day }
+	and (
+		{ Criterion 1: Sharp % decline from recent high }
+		(High_D[1] - Close_D) / High_D[1] > Threshold_PanicDecline
+		or (HighD(1) - Close_D) / HighD(1) > Threshold_PanicDecline
+		or (HighD(2) - Close_D) / HighD(2) > Threshold_PanicDecline
+	)
+	and (
+		{ Criterion 2: Extreme oversold on Daily }
+		Stoch_SlowK_D_Cur < Threshold_Stoch_OS 
+		or SMI_1H_Cur < -40
+	)
+	and (
+		{ Criterion 3: Price stretched from Daily SMAs }
+		(SMA1_D_Cur - Close) > Limit_MinDevSMA14_D
+		or (SMA2_D_Cur - Close) > Limit_MinDevSMA14_D * 1.2
+	)
+	and Volume_D > Volume_Avg_1D * 1.1  { Higher than average volume }
+Then Has_SharpDecline_D = True;
+
+{ Allow Counter-Trend Long when Sharp Decline detected }
+If Has_SharpDecline_D Then Can_CounterLong = True;
 
 { ============================================
   SECTION 18: ENTRY - TREND FOLLOWING (ID 100-199)
@@ -1213,7 +1250,57 @@ Else If Close < SMA1_1M Then Flag_PrintSMA14Dev = True ;
   SECTION 19: ENTRY - MEAN REVERSION (ID 200-299)
   ============================================ }
 
-{ Placeholder for Mean Reversion Strategies }
+{ Entry 201: Daily Oversold Bounce - Counter-Trend on Sharp Decline }
+If Can_CounterLong 
+	and Has_SharpDecline_D
+	and Input_AllowMeanReversion
+Then
+Begin
+	{ Wait for lower timeframe momentum reversal signals }
+	If (
+		{ 1-Hour showing signs of bottoming }
+		(
+			(SMI_1H_Cur > SMI_1H and BarStatus_1H <> Const_BarClosed) 
+			or (SMI_1H > SMI_1H[1] and BarStatus_1H = Const_BarClosed)
+		)
+		and Stoch_SlowK_1H_Cur > Stoch_SlowD_1H_Cur
+		and Stoch_SlowK_1H_Cur < Threshold_Stoch_Neutral
+	)
+	and (
+		{ 15-Minute confirmation }
+		(
+			(SMI_15M_Cur > SMI_15M and BarStatus_15M <> Const_BarClosed) 
+			or (SMI_15M > SMI_15M[1] and BarStatus_15M = Const_BarClosed)
+		)
+		or CurrentBar_15M - Num_KDCrossUp_15M <= 1
+		or Stoch_SlowK_15M_Cur > Stoch_SlowD_15M_Cur
+	)
+	and (
+		{ 5-Minute showing upward momentum }
+		SMA1_Slope_5M_Cur > 0
+		and (
+			(SMI_5M_Cur > SMI_5M and BarStatus_5M <> Const_BarClosed) 
+			or (SMI_5M > SMI_5M[1] and BarStatus_5M = Const_BarClosed)
+		)
+		and Stoch_SlowK_5M_Cur > Stoch_SlowD_5M_Cur
+	)
+	and (
+		{ 1-Minute entry trigger }
+		Close > Close[1]
+		and SMA1_Slope_1M > 0
+		and Stoch_SlowK_1M > Stoch_SlowD_1M
+		and (SMI_1M > 0 or SMI_1M > SMI_1M[1])
+	)
+	and Close > Low_Cycle_1M  { Not at cycle low }
+Then
+Begin
+	Entry_Technical = 201 ; { Mean Reversion - Daily Panic Bounce }
+	Entry_Timeframe = 2 ; { Daily trigger }
+	Exit_Strategy_ID = 3 ; { Quick Profit Target + Breakeven }
+End;
+End;
+
+{ Placeholder for Additional Mean Reversion Strategies }
 
 { ============================================
   SECTION 20: ENTRY - BREAKOUT (ID 300-399)
