@@ -104,19 +104,19 @@ Variables:
 	
 	{ Bar Counters }
 	Count_AboveSMA1_1M(0), Count_AboveSMA2_1M(0), Count_AboveSMA3_1M(0), Count_AboveSMA4_1M(0),
-	Count_AboveSMA1_D(0), Count_AboveSMA2_D(0), Count_AboveSMA3_D(0), Count_AboveSMA4_D(0),
-	Count_AboveSMA1_1H(0), Count_AboveSMA2_1H(0), Count_AboveSMA3_1H(0), Count_AboveSMA4_1H(0),
-	Count_AboveSMA1_15M(0), Count_AboveSMA2_15M(0), Count_AboveSMA3_15M(0), Count_AboveSMA4_15M(0),
-	Count_UnderSMA1_D(0), Count_UnderSMA2_D(0), Count_UnderSMA3_D(0), Count_UnderSMA4_D(0),
-	Count_UnderSMA1_1H(0), Count_UnderSMA2_1H(0), Count_UnderSMA3_1H(0), Count_UnderSMA4_1H(0),
-	Count_UnderSMA1_15M(0), Count_UnderSMA2_15M(0), Count_UnderSMA3_15M(0), Count_UnderSMA4_15M(0),
+	Count_AboveSMA1_D(0, Data2), Count_AboveSMA2_D(0, Data2), Count_AboveSMA3_D(0, Data2), Count_AboveSMA4_D(0, Data2),
+	Count_AboveSMA1_1H(0, Data3), Count_AboveSMA2_1H(0, Data3), Count_AboveSMA3_1H(0, Data3), Count_AboveSMA4_1H(0, Data3),
+	Count_AboveSMA1_15M(0, Data4), Count_AboveSMA2_15M(0, Data4), Count_AboveSMA3_15M(0, Data4), Count_AboveSMA4_15M(0, Data4),
+	Count_UnderSMA1_D(0, Data2), Count_UnderSMA2_D(0, Data2), Count_UnderSMA3_D(0, Data2), Count_UnderSMA4_D(0, Data2),
+	Count_UnderSMA1_1H(0, Data3), Count_UnderSMA2_1H(0, Data3), Count_UnderSMA3_1H(0, Data3), Count_UnderSMA4_1H(0, Data3),
+	Count_UnderSMA1_15M(0, Data4), Count_UnderSMA2_15M(0, Data4), Count_UnderSMA3_15M(0, Data4), Count_UnderSMA4_15M(0, Data4),
 	Count_SMA1SlopeUp(0), Count_SMA1MAUp(0), Count_SMA2SlopeUp(0), Count_SMA2MAUp(0),
 	Count_CloseHigher(0),
 	
 	{ Cross Bar Numbers }
-	Num_KDCrossUp_1M(0), Num_KDCrossDown_1M(0), Num_KDCrossUp_15M(0), Num_KDCrossDown_15M(0),
-	Num_SMICrossUp_1M(0), Num_SMICrossUp_15M(0), Num_SMICrossUp_1H(0), Num_SMICrossDown_15M(0),
-	Num_StochOSCrossUp_5M(0), Num_StochOBCrossDown_5M(0),
+	Num_KDCrossUp_1M(0), Num_KDCrossDown_1M(0), Num_KDCrossUp_15M(0, Data4), Num_KDCrossDown_15M(0, Data4),
+	Num_SMICrossUp_1M(0), Num_SMICrossUp_15M(0, Data4), Num_SMICrossUp_1H(0, Data3), Num_SMICrossDown_15M(0, Data4),
+	Num_StochOSCrossUp_5M(0, Data5), Num_StochOBCrossDown_5M(0, Data5),
 	
 	{ Price Variables }
 	Range_RecentDay(0), High_RecentDay(0), Low_RecentDay(0),
@@ -136,19 +136,19 @@ Variables:
 	Low_Cycle_1H(Close, Data3), High_Cycle_1H(Close, Data3),
 	
 	{ Data Proxies - Daily }
-	Open_D(0), High_D(0), Low_D(0), Close_D(0), Volume_D(0), Volume_Avg_1D(0), CurrentBar_D(0),
+	Open_D(0, Data2), High_D(0, Data2), Low_D(0, Data2), Close_D(0, Data2), Volume_D(0, Data2), Volume_Avg_1D(0, Data2), CurrentBar_D(0, Data2),
 
 	{ Data Proxies - 1 Hour }
-	Open_1H(0), High_1H(0), Low_1H(0), Close_1H(0), Volume_1H(0), Volume_Avg_1H(0), CurrentBar_1H(0),
+	Open_1H(0, Data3), High_1H(0, Data3), Low_1H(0, Data3), Close_1H(0, Data3), Volume_1H(0, Data3), Volume_Avg_1H(0, Data3), CurrentBar_1H(0, Data3),
 
 	{ Data Proxies - 15 Minute }
-	Open_15M(0), High_15M(0), Low_15M(0), Close_15M(0), Volume_15M(0), Volume_Avg_15M(0), CurrentBar_15M(0),
+	Open_15M(0, Data4), High_15M(0, Data4), Low_15M(0, Data4), Close_15M(0, Data4), Volume_15M(0, Data4), Volume_Avg_15M(0, Data4), CurrentBar_15M(0, Data4),
 
 	{ Data Proxies - 5 Minute }
-	Open_5M(0), High_5M(0), Low_5M(0), Close_5M(0), Volume_5M(0), Volume_Avg_5M(0), CurrentBar_5M(0),
+	Open_5M(0, Data5), High_5M(0, Data5), Low_5M(0, Data5), Close_5M(0, Data5), Volume_5M(0, Data5), Volume_Avg_5M(0, Data5), CurrentBar_5M(0, Data5),
 	
 	{ Bar Status Proxies }
-	BarStatus_D(0), BarStatus_1H(0), BarStatus_15M(0), BarStatus_5M(0),
+	BarStatus_D(0, Data2), BarStatus_1H(0, Data3), BarStatus_15M(0, Data4), BarStatus_5M(0, Data5),
 	
 	{ SMA Values - 1 Minute }
 	SMA1_1M(0), SMA2_1M(0), SMA3_1M(0), SMA4_1M(0), SMA5_1M(0),
@@ -219,7 +219,7 @@ Variables:
 	
 	{ SMI - Stochastic Momentum Index }
 	Len_SMI1(14), Len_SMI2(21), Len_SMI3(2),
-	SMI_1M(0), SMI_5M(0), SMI_15M(0), SMI_1H(0),
+	SMI_1M(0), SMI_5M(0, Data5), SMI_15M(0, Data4), SMI_1H(0, Data3),
 	SMI_5M_Cur(0), SMI_15M_Cur(0), SMI_1H_Cur(0),
 	
 	{ Other Indicators }
@@ -270,11 +270,11 @@ Open_5M = Open of Data5; High_5M = High of Data5; Low_5M = Low of Data5; Close_5
 Volume_5M = Volume of Data5; Volume_Avg_1H = Average(Volume_1H, Len_VolAvg) of Data5;
 CurrentBar_5M = CurrentBar of Data5;
 
-	{ Bar Status Initialization }
-	BarStatus_D = BarStatus(2);
-	BarStatus_1H = BarStatus(3);
-	BarStatus_15M = BarStatus(4);
-	BarStatus_5M = BarStatus(5);
+{ Bar Status Initialization }
+BarStatus_D = BarStatus(2);
+BarStatus_1H = BarStatus(3);
+BarStatus_15M = BarStatus(4);
+BarStatus_5M = BarStatus(5);
 
 { ============================================
   SECTION 3: SMA CALCULATIONS
