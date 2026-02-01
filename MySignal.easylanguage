@@ -233,11 +233,14 @@ Variables:
 	Dist_ClosestSMA(0), Num_ClosestResistSMA(0), Max_SMASupports(0),
 	Len_SwingLookup(21),
 	
-	{ Debug Variables - Keep Original Names for Now }
+	{ Debug System Variables - Leave False. This converted to true by debug function call at the bottom of the code }
 	IM(Text), ok(False), Okp(False) ;
 
-{ For Debugging. Leave False. This converted to true by Date Time function call at the bottom of the code }
-IM = ("MySTGY," + numtostr(d,0) + "," + numtostr(t,0) + "," + GetSymbolName + ":" + numtostr(Barinterval,0) + ",");
+{ ============================================
+  SECTION 1: Debug System
+  ============================================ }
+IM = ("MySignal," + numtostr(d,0) + "," + numtostr(t,0) + "," + GetSymbolName + ":" + numtostr(Barinterval,0) + ",");
+{if okP then print(IM, "SMA1_1H, SMA1_1H_Cur", SMA1_1H, SMA1_1H_Cur);}
 
 { ============================================
   SECTION 2: INITIALIZATION & CONSTANTS
@@ -1613,4 +1616,4 @@ If BarStatus_5M = Const_BarClosed Then Open_5M_Cur = -1 ;
 End;
 
 { For debugging - adjust date/time or comment to disable }
-{ Okp = debug(1161230, 1430, ok, okp); }
+{ Okp = debug(1251230, 1430, ok, okp); }
