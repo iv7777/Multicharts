@@ -2,12 +2,12 @@
   PROJECT MORPHEUS - MULTI-TIMEFRAME SIGNAL
   ================================================ 
   
-  *** VISUAL DEBUG MODE TOGGLE ***
-  Use Input_VisualDebugMode to switch modes:
-  - TRUE = Visual Debug Mode (no trades, shows markers)
+  *** VISUAL SIGNAL MODE TOGGLE ***
+  Use Input_VisualSignalMode to switch modes:
+  - TRUE = Visual Signal Mode (no trades, shows markers)
   - FALSE = Live Trading Mode (executes trades)
   
-  Visual markers when Input_VisualDebugMode = TRUE:
+  Visual markers when Input_VisualSignalMode = TRUE:
   - ENTRY_XXX (Cyan) = Technical entry signals
   - EOD_X (Yellow) = End of day entries  
   - GAP_X (Magenta) = Gap down entries
@@ -28,13 +28,22 @@
 	Data5 = Fourth additional series (5-min) }
 
 Inputs: 
-	Input_VisualDebugMode(True),
+	Input_VisualSignalMode(True),
 	Input_AllowLong(True), Input_AllowShort(False), Input_AllowMeanReversion(True),
 	Len_SMA1(21), Len_SMA2(50), Len_SMA3(150), Len_SMA4(200), Len_SMA5(105), 
 	Len_Stoch(14), Len_VolAvg(50),
 	Input_RiskPerTrade(500), Input_StopPct(0.015), Input_TrailActivPct(0.02), Input_TrailCallback(0.005),
 	Input_StartTime(0930), Input_EndTime(1545), Input_MaxTrades(10), Input_MinEntryInterval(5),
-	Threshold_PanicDecline(0.06);
+	Threshold_PanicDecline(0.06),
+	
+	{ Debug System Controls }
+	Input_EnableDebug(False),                                    { Master debug switch }
+	Input_DebugStartDate(1260101),                               { YYYMMDD format }
+	Input_DebugStartTime(1300),                                  { HHMM format }
+	Input_DebugEndDate(1261231),
+	Input_DebugEndTime(1600),
+	Input_DebugToFile(False),                                     { Toggle CSV file writing }
+	Input_DebugFilePath("D:\MySignal_Debug.csv");                { CSV output file }
 
 
 Arrays: 
@@ -233,14 +242,10 @@ Variables:
 	Dist_ClosestSMA(0), Num_ClosestResistSMA(0), Max_SMASupports(0),
 	Len_SwingLookup(21),
 	
-	{ Debug System Variables - Leave False. This converted to true by debug function call at the bottom of the code }
-	IM(Text), ok(False), Okp(False) ;
-
-{ ============================================
-  SECTION 1: Debug System
-  ============================================ }
-IM = ("MySignal," + numtostr(d,0) + "," + numtostr(t,0) + "," + GetSymbolName + ":" + numtostr(Barinterval,0) + ",");
-{if okP then print(IM, "SMA1_1H, SMA1_1H_Cur", SMA1_1H, SMA1_1H_Cur);}
+	{ Debug System Variables }
+	Flag_InDebugWindow(False),
+	Flag_DebugHeaderWritten(False),
+	Text_DebugLine("");
 
 { ============================================
   SECTION 2: INITIALIZATION & CONSTANTS
@@ -1223,7 +1228,6 @@ Begin
 		Entry_Technical = 101 ; { Trend Follow - SMA Deviation }
 		Entry_Timeframe = 0 ;
 		Exit_Strategy_ID = 1 ; { Standard Trailing Stop }
-		print(IM, Volatility_Pct) ;
 	End;
 End
 Else If Close < SMA1_1M Then Flag_PrintSMA14Dev = True ;
@@ -1421,7 +1425,7 @@ Begin
 			If Close * (1 - Input_TrailCallback) > Stop_Price Then Stop_Price = Close * (1 - Input_TrailCallback);
 		End;
 		
-		If Input_VisualDebugMode Then
+		If Input_VisualSignalMode Then
 		Begin
 			{ Visual: Draw stop level }
 			Value1 = TL_SetEnd(ID_TrendLine, Date, Time, Stop_Price);
@@ -1437,7 +1441,7 @@ Begin
 		{ Example: Exit after 10 bars if no profit }
 		If BarsSinceEntry > 10 and Close < EntryPrice * 1.01 Then
 		Begin
-			If Input_VisualDebugMode Then
+			If Input_VisualSignalMode Then
 			Begin
 				Value1 = Text_New(Date, Time, Low * 0.998, "TIME_EXIT");
 				Value1 = Text_SetColor(Value1, Magenta);
@@ -1448,7 +1452,7 @@ Begin
 		End;
 			
 		{ Maintain Safety Stop }
-		If Input_VisualDebugMode Then
+		If Input_VisualSignalMode Then
 		Begin
 			Value1 = TL_SetEnd(ID_TrendLine, Date, Time, Stop_Price);
 			Value1 = TL_SetColor(ID_TrendLine, Red);
@@ -1463,7 +1467,7 @@ Begin
 		{ Move to Breakeven after 1% profit }
 		If High > EntryPrice * 1.01 and Stop_Price < EntryPrice Then Stop_Price = EntryPrice;
 		
-		If Input_VisualDebugMode Then
+		If Input_VisualSignalMode Then
 		Begin
 			{ Visual: Draw target and stop levels }
 			ID_Text = TL_New(Date, Time, EntryPrice * 1.03, Date[1], Time[1], EntryPrice * 1.03);
@@ -1481,7 +1485,7 @@ Begin
 	{ Default/Fallback: Just Safety Stop }
 	If Exit_Strategy_ID = 0 Then
 	Begin
-		If Input_VisualDebugMode Then
+		If Input_VisualSignalMode Then
 		Begin
 			Value1 = TL_SetEnd(ID_TrendLine, Date, Time, Stop_Price);
 			Value1 = TL_SetColor(ID_TrendLine, Red);
@@ -1533,7 +1537,7 @@ Begin
 
 	If Entry_Technical > 0 Then
 	Begin
-		If Input_VisualDebugMode Then
+		If Input_VisualSignalMode Then
 		Begin
 			{ Visual: Draw entry marker }
 			ID_Text = Text_New(Date, Time, High * 1.008, "ENTRY_" + NumToStr(Entry_Technical, 0));
@@ -1557,7 +1561,7 @@ Begin
 	
 	If Entry_EOD_HoldRule > 0 Then
 	Begin
-		If Input_VisualDebugMode Then
+		If Input_VisualSignalMode Then
 		Begin
 			{ Visual: Draw EOD entry marker }
 			ID_Text = Text_New(Date, Time, High * 1.008, "EOD_" + NumToStr(Entry_EOD_HoldRule, 0));
@@ -1580,7 +1584,7 @@ Begin
 	
 	If Entry_GapDown > 0 Then
 	Begin
-		If Input_VisualDebugMode Then
+		If Input_VisualSignalMode Then
 		Begin
 			{ Visual: Draw gap entry marker }
 			ID_Text = Text_New(Date, Time, High * 1.008, "GAP_" + NumToStr(Entry_GapDown, 0));
@@ -1615,5 +1619,34 @@ If BarStatus_5M = Const_BarClosed Then Open_5M_Cur = -1 ;
 
 End;
 
-{ For debugging - adjust date/time or comment to disable }
-{ Okp = debug(1251230, 1430, ok, okp); }
+{ ============================================
+  SECTION 24: DEBUG SYSTEM
+  ============================================ }
+
+If Input_EnableDebug Then
+Begin
+	{ Check if within debug time window }
+	Flag_InDebugWindow = (Date > Input_DebugStartDate or (Date = Input_DebugStartDate and Time >= Input_DebugStartTime))
+	                     and (Date < Input_DebugEndDate or (Date = Input_DebugEndDate and Time <= Input_DebugEndTime)) ;
+	
+	If Flag_InDebugWindow Then
+	Begin
+		{ Write CSV header on first bar in window }
+		If Flag_DebugHeaderWritten = False and Input_DebugToFile Then
+		Begin
+			FileAppend(Input_DebugFilePath,
+				"Date,Time,Close,EntryTechnical,ExitID" + NewLine) ;
+			Flag_DebugHeaderWritten = True ;
+		End ;
+		
+		{ Construct log line }
+		Text_DebugLine = NumToStr(Date, 0) + "," +
+			NumToStr(Time, 0) + "," +
+			NumToStr(Close, 2) + "," +
+			NumToStr(Entry_Technical, 0) + "," +
+			NumToStr(Exit_Strategy_ID, 0) ;
+		
+		If Input_DebugToFile Then FileAppend(Input_DebugFilePath, Text_DebugLine + NewLine) ;
+		Print(Text_DebugLine) ;
+	End ;
+End ;
