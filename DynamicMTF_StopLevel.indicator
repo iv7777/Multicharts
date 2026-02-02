@@ -1,0 +1,167 @@
+{ ================================================
+  INDICATOR: DynamicMTF_StopLevel
+  Project Morpheus - Adaptive Multi-Timeframe Stop
+  ================================================ 
+  
+  PURPOSE:
+  Shows a text label indicating the stop level based on current chart's timeframe.
+  Checks if price is above SMA21 AND SMA21 slope is positive.
+  
+  SINGLE-DATA VERSION:
+  - Uses only Data1 (current chart)
+  - Auto-detects chart timeframe
+  - Works independently in each chart window
+  - No multi-data series required
+  - TEXT ONLY (no plot line)
+  
+  USAGE:
+  Apply to multiple chart windows (1M, 5M, 15M, 1H, Daily)
+  Each window will show its own timeframe's stop level as text
+  ================================================ }
+
+Inputs:
+	Len_SMA1(21),                      { SMA length }
+	Input_ShowLabels(True),            { Show text labels with timeframe }
+	Input_LabelOffsetPct(0.002) ;      { Label offset as % of price }
+
+Variables:
+	{ SMA Values }
+	SMA1(0),
+	
+	{ SMA Slope (3-bar lookback for momentum) }
+	SMA1_Slope(0),
+	
+	{ Stop Level Selection }
+	Stop_Level(0),
+	Text_Timeframe(""),
+	
+	{ Chart Timeframe Detection }
+	Chart_Interval(0),
+	
+	{ Text Label Management }
+	ID_Text(0),
+	ID_PrevText(0),
+	Num_PrevTextBar(0),
+	Offset_Text(0),
+	Text_Color(0),
+	
+	{ Qualification Flag }
+	Qual_Stop(False) ;
+
+{ ============================================
+  SECTION 1: CHART TIMEFRAME DETECTION
+  ============================================ }
+
+{ Get current chart's bar interval in minutes }
+Chart_Interval = BarInterval ;
+
+{ Determine timeframe label based on interval }
+If Chart_Interval >= 1440 Then
+	Text_Timeframe = "D"              { Daily or higher }
+Else If Chart_Interval >= 60 Then
+	Text_Timeframe = "1H"             { 60-minute to < Daily }
+Else If Chart_Interval >= 15 Then
+	Text_Timeframe = "15M"            { 15-minute to < 1-hour }
+Else If Chart_Interval >= 5 Then
+	Text_Timeframe = "5M"             { 5-minute to < 15-minute }
+Else
+	Text_Timeframe = "1M" ;           { Less than 5-minute }
+
+{ ============================================
+  SECTION 2: SMA CALCULATION
+  ============================================ }
+
+{ Calculate SMA on current chart data }
+SMA1 = AverageFC(Close, Len_SMA1) ;
+
+{ ============================================
+  SECTION 3: SLOPE CALCULATION
+  ============================================ }
+
+{ Using 3-bar slope for momentum confirmation }
+{ Positive slope = SMA[0] > SMA[3] }
+SMA1_Slope = SMA1 - SMA1[3] ;
+
+{ ============================================
+  SECTION 4: STOP QUALIFICATION
+  ============================================ }
+
+{ Check: Price > SMA AND Slope > 0 }
+Qual_Stop = (Close > SMA1) and (SMA1_Slope > 0) ;
+
+{ ============================================
+  SECTION 5: STOP LEVEL SELECTION
+  ============================================ }
+
+{ Use SMA as stop level }
+Stop_Level = SMA1 ;
+
+{ ============================================
+  SECTION 6: TEXT LABELS
+  ============================================ }
+
+If Input_ShowLabels Then
+Begin
+	{ Remove previous text label if it's recent (within 5 bars) }
+	If CurrentBar - Num_PrevTextBar < 5 Then
+		Value1 = Text_Delete(ID_PrevText) ;
+	
+	{ Calculate offset for label placement }
+	Offset_Text = Close * Input_LabelOffsetPct ;
+	
+	{ Determine text color based on timeframe and qualification }
+	If Qual_Stop Then
+	Begin
+		{ Qualified stops - color by timeframe }
+		If Text_Timeframe = "D" Then
+			Text_Color = RGB(255, 0, 0)        { Red = Daily }
+		Else If Text_Timeframe = "1H" Then
+			Text_Color = RGB(255, 165, 0)      { Orange = 1H }
+		Else If Text_Timeframe = "15M" Then
+			Text_Color = RGB(255, 255, 0)      { Yellow = 15M }
+		Else If Text_Timeframe = "5M" Then
+			Text_Color = RGB(0, 255, 0)        { Green = 5M }
+		Else
+			Text_Color = RGB(0, 255, 255) ;    { Cyan = 1M }
+	End
+	Else
+	Begin
+		{ Not qualified - gray }
+		Text_Color = RGB(128, 128, 128) ;
+	End ;
+	
+	{ Calculate dynamic time offset based on chart interval }
+	Var: Num_BarsBack(0) ;
+	
+	If Chart_Interval >= 1440 Then
+		Num_BarsBack = 3                     { Daily: 3 bars back }
+	Else If Chart_Interval >= 60 Then
+		Num_BarsBack = 5                     { 1-Hour: 5 bars back }
+	Else If Chart_Interval >= 15 Then
+		Num_BarsBack = 8                     { 15-Min: 8 bars back }
+	Else If Chart_Interval >= 5 Then
+		Num_BarsBack = 10                    { 5-Min: 10 bars back }
+	Else
+		Num_BarsBack = 12 ;                  { 1-Min: 12 bars back }
+	
+	{ Safety check - don't go beyond available history }
+	If Num_BarsBack > CurrentBar - 1 Then
+		Num_BarsBack = MaxList(1, CurrentBar - 1) ;
+	
+	{ Create new text label with dynamic time offset }
+	If Qual_Stop Then
+		ID_Text = Text_New(Date, Time[Num_BarsBack], Stop_Level - Offset_Text, 
+		                   "Stop[" + Text_Timeframe + "]")
+	Else
+		ID_Text = Text_New(Date, Time[Num_BarsBack], Stop_Level - Offset_Text, 
+		                   "Stop[" + Text_Timeframe + "-NONE]") ;
+	
+	{ Set text appearance }
+	Value1 = Text_SetColor(ID_Text, Text_Color) ;
+	Value1 = Text_SetSize(ID_Text, 8) ;
+	Value1 = Text_SetStyle(ID_Text, 0, 0) ;  { Normal style }
+	
+	{ Store for next bar }
+	ID_PrevText = ID_Text ;
+	Num_PrevTextBar = CurrentBar ;
+End ;
