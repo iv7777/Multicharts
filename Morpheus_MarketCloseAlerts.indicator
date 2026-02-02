@@ -1,0 +1,347 @@
+{ ================================================
+  INDICATOR: Morpheus_MarketCloseAlerts
+  Project Morpheus - Multi-Interval Alert System
+  ================================================
+  
+  PURPOSE:
+  Alert system that escalates as market close approaches:
+  - 30 minutes before close: Start 5-minute interval alerts
+  - 10 minutes before close: Switch to 1-minute interval alerts
+  - Provides position context and trend alignment
+  
+  FEATURES:
+  - Visual markers (Green = 5-min, Red = 1-min)
+  - Flashing background
+  - Audio alerts (real-time only)
+  - Auto-cleanup of previous alerts (live market only)
+  - Optional historical alert markers
+  - Position-aware context (via GlobalVar from strategy)
+  - 1-Hour trend alignment checking
+  ================================================ }
+
+Inputs:
+	{ === ALERT SCHEDULE === }
+	Input_MinutesBeforeClose_Start(30),     { Start alerts 30 min before close }
+	Input_Interval_5Min(5),                 { Normal interval (minutes) }
+	Input_MinutesBeforeClose_Urgent(10),    { Switch to urgent 10 min before }
+	Input_Interval_1Min(1),                 { Urgent interval (minutes) }
+	
+	{ === VISUAL SETTINGS === }
+	Input_ShowVisualMarkers(True),          { Show text markers on chart }
+	Input_ShowHistoricalAlerts(False),      { Show alerts on historical bars }
+	Input_FlashBackground(True),            { Flash background on alerts }
+	Input_FlashInterval(2),                 { Flash every N bars }
+	
+	{ === AUDIO SETTINGS === }
+	Input_EnableAudio(True),                { Enable audio alerts }
+	Input_AudioEveryAlert(True),            { True = every alert, False = once per mode }
+	
+	{ === POSITION CONTEXT === }
+	Input_ShowPositionContext(False),       { Include position info (requires strategy GlobalVar) }
+	Input_Check1HTrend(True) ;             { Check 1H trend alignment (via GlobalVar) }
+
+Variables:
+	{ === TIME MANAGEMENT === }
+	Time_MarketClose(0),                    { Session end time }
+	Num_MinutesToClose(0),                  { Minutes remaining in session }
+	Num_CurrentMinute(0),                   { Current minute (0-59) }
+	Num_LastAlertMinute(-1),                { Track last alert to prevent duplicates }
+	
+	{ === ALERT STATE === }
+	Text_AlertMode(""),                     { "OFF" / "5MIN" / "1MIN" / "CLOSED" }
+	Text_AlertMode_Previous(""),            { Track mode changes }
+	Flag_ShouldAlert(False),                { Should alert fire this bar? }
+	Flag_AudioPlayed_5Min(False),           { Track if audio played for this mode }
+	Flag_AudioPlayed_1Min(False),
+	
+	{ === VISUAL ELEMENTS === }
+	ID_Text(0),                             { Text marker ID }
+	ID_PreviousText(0),                     { Previous text marker (for cleanup) }
+	Text_AlertLabel(""),                    { Alert text content }
+	Flag_FlashState(False),                 { Flash on/off state }
+	Flag_ShowThisAlert(False),              { Show alert on this bar? }
+	
+	{ === POSITION CONTEXT === }
+	Num_Position(0),                        { Current position }
+	Num_BarsHeld(0),                        { Bars in position }
+	Num_ProfitPct(0),                       { Profit percentage }
+	Price_Entry(0),                         { Entry price }
+	Text_PositionInfo(""),                  { Position summary text }
+	
+	{ === 1-HOUR TREND (via Data2) === }
+	Close_1H(0),
+	SMA1_1H(0),
+	Trend_1H(0),                            { 1=Up, -1=Down }
+	Text_TrendInfo("") ;
+
+{ ============================================
+  SECTION 1: INITIALIZATION
+  ============================================ }
+
+If CurrentBar = 1 Then
+Begin
+	Num_LastAlertMinute = -1 ;
+	Text_AlertMode_Previous = "OFF" ;
+	Flag_AudioPlayed_5Min = False ;
+	Flag_AudioPlayed_1Min = False ;
+	ID_PreviousText = 0 ;
+End ;
+
+{ ============================================
+  SECTION 2: TIME CALCULATION
+  ============================================ }
+
+{ Get market close time }
+Time_MarketClose = SessionEndTime(0, 1) ;
+
+{ Calculate minutes to close }
+Num_MinutesToClose = TimeToMinutes(Time_MarketClose) - TimeToMinutes(Time) ;
+
+{ Extract current minute component }
+Num_CurrentMinute = Mod(TimeToMinutes(Time), 60) ;
+
+{ ============================================
+  SECTION 3: DETERMINE ALERT MODE
+  ============================================ }
+
+If Num_MinutesToClose < 0 Then
+	Text_AlertMode = "CLOSED"
+Else If Num_MinutesToClose >= Input_MinutesBeforeClose_Start Then
+	Text_AlertMode = "OFF"
+Else If Num_MinutesToClose >= Input_MinutesBeforeClose_Urgent Then
+	Text_AlertMode = "5MIN"
+Else If Num_MinutesToClose >= 0 Then
+	Text_AlertMode = "1MIN"
+Else
+	Text_AlertMode = "CLOSED" ;
+
+{ Detect mode change }
+If Text_AlertMode <> Text_AlertMode_Previous Then
+Begin
+	{ Reset audio flags on mode change }
+	Flag_AudioPlayed_5Min = False ;
+	Flag_AudioPlayed_1Min = False ;
+	
+	Text_AlertMode_Previous = Text_AlertMode ;
+End ;
+
+{ ============================================
+  SECTION 4: ALERT TRIGGER LOGIC
+  ============================================ }
+
+Flag_ShouldAlert = False ;
+
+If Text_AlertMode = "5MIN" Then
+Begin
+	{ Alert every 5 minutes }
+	If Mod(Num_CurrentMinute, Input_Interval_5Min) = 0 
+		and Num_CurrentMinute <> Num_LastAlertMinute Then
+		Flag_ShouldAlert = True ;
+End
+Else If Text_AlertMode = "1MIN" Then
+Begin
+	{ Alert every 1 minute }
+	If Mod(Num_CurrentMinute, Input_Interval_1Min) = 0 
+		and Num_CurrentMinute <> Num_LastAlertMinute Then
+		Flag_ShouldAlert = True ;
+End ;
+
+{ ============================================
+  SECTION 5: POSITION CONTEXT
+  ============================================ }
+
+If Input_ShowPositionContext Then
+Begin
+	{ Read position info from global variables (set by strategy) }
+	{ Using AccuracyGetNamedInt/Double functions }
+	
+	Num_Position = AccuracyGetNamedInt("Morpheus_Position", 0) ;
+	
+	If Num_Position = 1 Then
+	Begin
+		{ Read position details }
+		Num_BarsHeld = AccuracyGetNamedInt("Morpheus_BarsHeld", 0) ;
+		Price_Entry = AccuracyGetNamedDouble("Morpheus_EntryPrice", 0) ;
+		Num_ProfitPct = AccuracyGetNamedDouble("Morpheus_ProfitPct", 0) ;
+		
+		{ Verify we got valid data (BarsHeld > 0 means strategy is broadcasting) }
+		If Num_BarsHeld > 0 Then
+		Begin
+			Text_PositionInfo = "LONG +" + NumToStr(Num_ProfitPct, 2) + "% (" +
+			                    NumToStr(Num_BarsHeld, 0) + " bars)" ;
+		End
+		Else
+		Begin
+			{ Strategy might not be running or broadcasting }
+			Text_PositionInfo = "LONG (no data)" ;
+		End ;
+	End
+	Else If Num_Position = -1 Then
+	Begin
+		{ Read short position details }
+		Num_BarsHeld = AccuracyGetNamedInt("Morpheus_BarsHeld", 0) ;
+		Price_Entry = AccuracyGetNamedDouble("Morpheus_EntryPrice", 0) ;
+		Num_ProfitPct = AccuracyGetNamedDouble("Morpheus_ProfitPct", 0) ;
+		
+		If Num_BarsHeld > 0 Then
+		Begin
+			Text_PositionInfo = "SHORT +" + NumToStr(Num_ProfitPct, 2) + "% (" +
+			                    NumToStr(Num_BarsHeld, 0) + " bars)" ;
+		End
+		Else
+		Begin
+			Text_PositionInfo = "SHORT (no data)" ;
+		End ;
+	End
+	Else
+		Text_PositionInfo = "FLAT" ;
+End
+Else
+	Text_PositionInfo = "" ;
+
+{ ============================================
+  SECTION 6: 1-HOUR TREND CHECK
+  ============================================ }
+
+If Input_Check1HTrend Then
+Begin
+	{ Read trend info from global variables (set by strategy) }
+	Trend_1H = AccuracyGetNamedInt("Morpheus_Trend1H", 0) ;
+	
+	If Trend_1H = 1 Then
+	Begin
+		Text_TrendInfo = "1H: BULL" ;
+		{ Reminder if in opposite position }
+		If Num_Position = -1 Then Text_TrendInfo = Text_TrendInfo + " (CLOSE SHORT!)" ;
+	End
+	Else If Trend_1H = -1 Then
+	Begin
+		Text_TrendInfo = "1H: BEAR" ;
+		{ Reminder if in opposite position }
+		If Num_Position = 1 Then Text_TrendInfo = Text_TrendInfo + " (CLOSE LONG!)" ;
+	End
+	Else
+	Begin
+		Text_TrendInfo = "1H: NEUTRAL" ;
+	End ;
+End
+Else
+Begin
+	Trend_1H = 0 ;
+	Text_TrendInfo = "" ;
+End ;
+
+{ ============================================
+  SECTION 7: DETERMINE IF ALERT SHOULD SHOW
+  ============================================ }
+
+{ Determine if alert should be displayed on this bar }
+Flag_ShowThisAlert = False ;
+
+If Flag_ShouldAlert Then
+Begin
+	If LastBarOnChart Then
+		{ Always show on live bar }
+		Flag_ShowThisAlert = True
+	Else
+		{ On historical bars, check input setting }
+		Flag_ShowThisAlert = Input_ShowHistoricalAlerts ;
+End ;
+
+{ ============================================
+  SECTION 8: EXECUTE ALERTS
+  ============================================ }
+
+If Flag_ShouldAlert Then
+Begin
+	Num_LastAlertMinute = Num_CurrentMinute ;
+	
+	{ Build alert message }
+	Text_AlertLabel = NumToStr(Num_MinutesToClose, 0) + " MIN TO CLOSE" ;
+	
+	If Text_PositionInfo <> "" Then
+		Text_AlertLabel = Text_AlertLabel + NewLine + Text_PositionInfo ;
+	
+	If Text_TrendInfo <> "" Then
+		Text_AlertLabel = Text_AlertLabel + NewLine + Text_TrendInfo ;
+	
+	{ === DELETE PREVIOUS ALERT (Live Market Only) === }
+	If LastBarOnChart and ID_PreviousText <> 0 Then
+	Begin
+		Value1 = Text_Delete(ID_PreviousText) ;
+		ID_PreviousText = 0 ;
+	End ;
+	
+	{ === VISUAL MARKERS === }
+	If Input_ShowVisualMarkers and Flag_ShowThisAlert Then
+	Begin
+		ID_Text = Text_New(Date, Time, High, Text_AlertLabel) ;
+		
+		{ Color based on alert mode }
+		If Text_AlertMode = "5MIN" Then
+		Begin
+			Value1 = Text_SetColor(ID_Text, Green) ;
+			Value1 = Text_SetSize(ID_Text, 10) ;
+		End
+		Else If Text_AlertMode = "1MIN" Then
+		Begin
+			Value1 = Text_SetColor(ID_Text, Red) ;
+			Value1 = Text_SetSize(ID_Text, 12) ;
+			Value1 = Text_SetStyle(ID_Text, 1, 1) ;  { Bold }
+		End ;
+		
+		{ Store this text ID for cleanup on next alert (live only) }
+		If LastBarOnChart Then
+			ID_PreviousText = ID_Text ;
+	End ;
+	
+	{ === AUDIO ALERTS === }
+	If Input_EnableAudio and LastBarOnChart Then
+	Begin
+		{ Play audio based on settings }
+		If Input_AudioEveryAlert Then
+		Begin
+			{ Audio on every alert }
+			Alert(Text_AlertLabel) ;
+		End
+		Else
+		Begin
+			{ Audio once per mode }
+			If Text_AlertMode = "5MIN" and Flag_AudioPlayed_5Min = False Then
+			Begin
+				Alert(Text_AlertLabel) ;
+				Flag_AudioPlayed_5Min = True ;
+			End
+			Else If Text_AlertMode = "1MIN" and Flag_AudioPlayed_1Min = False Then
+			Begin
+				Alert(Text_AlertLabel) ;
+				Flag_AudioPlayed_1Min = True ;
+			End ;
+		End ;
+	End ;
+End ;
+
+{ ============================================
+  SECTION 9: FLASHING BACKGROUND
+  ============================================ }
+
+If Input_FlashBackground and Text_AlertMode <> "OFF" and Text_AlertMode <> "CLOSED" Then
+Begin
+	{ Flash based on bar number }
+	{ Alternates every Input_FlashInterval bars }
+	
+	Flag_FlashState = (Mod(CurrentBar, Input_FlashInterval * 2) < Input_FlashInterval) ;
+	
+	If Flag_FlashState Then
+	Begin
+		{ Flash ON }
+		If Text_AlertMode = "5MIN" Then
+			SetPlotBGColor(1, RGB(200, 255, 200))  { Light green }
+		Else If Text_AlertMode = "1MIN" Then
+			SetPlotBGColor(1, RGB(255, 200, 200)) ;  { Light red }
+	End
+	Else
+		SetPlotBGColor(1, White) ;  { Flash OFF }
+End
+Else
+	SetPlotBGColor(1, White) ;
