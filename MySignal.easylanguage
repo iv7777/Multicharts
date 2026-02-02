@@ -1620,6 +1620,25 @@ If BarStatus_5M = Const_BarClosed Then Open_5M_Cur = -1 ;
 End;
 
 { ============================================
+  SECTION 25: MORPHEUS GLOBAL BROADCASTING
+  ============================================ }
+
+{ Broadcast 1-Hour Trend }
+If Close > SMA1_1H_Cur and SMA1_Slope_1H_Cur > 0 Then 
+	Value1 = AccuracySetNamedInt("Morpheus_Trend1H", 1) // 1 = Bullish, -1 = Bearish, 0 = Neutral
+Else If Close < SMA1_1H_Cur and SMA1_Slope_1H_Cur < 0 Then 
+	Value1 = AccuracySetNamedInt("Morpheus_Trend1H", -1)
+Else 
+	Value1 = AccuracySetNamedInt("Morpheus_Trend1H", 0) ;
+
+{ Broadcast Position Placeholders }
+{ NOTE: Related logic to be implemented later }
+Value1 = AccuracySetNamedInt("Morpheus_Position", 1) ; // 1 = Long, -1 = Short, 0 = Flat
+Value1 = AccuracySetNamedInt("Morpheus_BarsHeld", 0) ; // Number of bars since entry
+Value1 = AccuracySetNamedDouble("Morpheus_EntryPrice", 0) ; // Entry price
+Value1 = AccuracySetNamedDouble("Morpheus_ProfitPct", 0) ; // Profit percentage
+
+{ ============================================
   SECTION 24: DEBUG SYSTEM
   ============================================ }
 
