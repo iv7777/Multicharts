@@ -11,7 +11,6 @@
   
   FEATURES:
   - Visual markers (Green = 5-min, Red = 1-min)
-  - Flashing background
   - Audio alerts (real-time only)
   - Auto-cleanup of previous alerts (live market only)
   - Optional historical alert markers
@@ -29,8 +28,6 @@ Inputs:
 	{ === VISUAL SETTINGS === }
 	Input_ShowVisualMarkers(True),          { Show text markers on chart }
 	Input_ShowHistoricalAlerts(False),      { Show alerts on historical bars }
-	Input_FlashBackground(True),            { Flash background on alerts }
-	Input_FlashInterval(2),                 { Flash every N bars }
 	
 	{ === AUDIO SETTINGS === }
 	Input_EnableAudio(True),                { Enable audio alerts }
@@ -58,7 +55,6 @@ Variables:
 	ID_Text(0),                             { Text marker ID }
 	ID_PreviousText(0),                     { Previous text marker (for cleanup) }
 	Text_AlertLabel(""),                    { Alert text content }
-	Flag_FlashState(False),                 { Flash on/off state }
 	Flag_ShowThisAlert(False),              { Show alert on this bar? }
 	
 	{ === POSITION CONTEXT === }
@@ -72,7 +68,8 @@ Variables:
 	Close_1H(0),
 	SMA1_1H(0),
 	Trend_1H(0),                            { 1=Up, -1=Down }
-	Text_TrendInfo("") ;
+	Text_TrendInfo(""),
+	Num_TargetPrice(0) ;                    { Calculated vertical coordinate }
 
 { ============================================
   SECTION 1: INITIALIZATION
@@ -106,7 +103,7 @@ Num_CurrentMinute = Mod(TimeToMinutes(Time), 60) ;
 
 If Num_MinutesToClose < 0 Then
 	Text_AlertMode = "CLOSED"
-Else If Num_MinutesToClose >= Input_MinutesBeforeClose_Start Then
+Else If Num_MinutesToClose > Input_MinutesBeforeClose_Start Then
 	Text_AlertMode = "OFF"
 Else If Num_MinutesToClose >= Input_MinutesBeforeClose_Urgent Then
 	Text_AlertMode = "5MIN"
@@ -260,10 +257,10 @@ Begin
 	Text_AlertLabel = NumToStr(Num_MinutesToClose, 0) + " MIN TO CLOSE" ;
 	
 	If Text_PositionInfo <> "" Then
-		Text_AlertLabel = Text_AlertLabel + NewLine + Text_PositionInfo ;
+		Text_AlertLabel = Text_AlertLabel + " - " + Text_PositionInfo ;
 	
 	If Text_TrendInfo <> "" Then
-		Text_AlertLabel = Text_AlertLabel + NewLine + Text_TrendInfo ;
+		Text_AlertLabel = Text_AlertLabel + " - " + Text_TrendInfo ;
 	
 	{ === DELETE PREVIOUS ALERT (Live Market Only) === }
 	If LastBarOnChart and ID_PreviousText <> 0 Then
@@ -275,7 +272,14 @@ Begin
 	{ === VISUAL MARKERS === }
 	If Input_ShowVisualMarkers and Flag_ShowThisAlert Then
 	Begin
-		ID_Text = Text_New(Date, Time, High, Text_AlertLabel) ;
+		{ Calculate vertical coordinate: use the furthest chart extreme from current price }
+		If (GetAppInfo(aiHighestDispValue) - Close) > (Close - GetAppInfo(aiLowestDispValue)) Then
+			Num_TargetPrice = GetAppInfo(aiHighestDispValue)
+		Else
+			Num_TargetPrice = GetAppInfo(aiLowestDispValue) ;
+
+		{ Create text label at the calculated price level }
+		ID_Text = Text_New(Date, Time, Num_TargetPrice, Text_AlertLabel) ;
 		
 		{ Color based on alert mode }
 		If Text_AlertMode = "5MIN" Then
@@ -287,8 +291,13 @@ Begin
 		Begin
 			Value1 = Text_SetColor(ID_Text, Red) ;
 			Value1 = Text_SetSize(ID_Text, 12) ;
-			Value1 = Text_SetStyle(ID_Text, 1, 1) ;  { Bold }
 		End ;
+
+		{ Set text alignment: right-aligned, top or bottom depending on vertical placement }
+		If Num_TargetPrice = GetAppInfo(aiHighestDispValue) Then
+			Value1 = Text_SetStyle(ID_Text, 1, 0)
+		Else
+			Value1 = Text_SetStyle(ID_Text, 1, 1) ;
 		
 		{ Store this text ID for cleanup on next alert (live only) }
 		If LastBarOnChart Then
@@ -320,28 +329,3 @@ Begin
 		End ;
 	End ;
 End ;
-
-{ ============================================
-  SECTION 9: FLASHING BACKGROUND
-  ============================================ }
-
-If Input_FlashBackground and Text_AlertMode <> "OFF" and Text_AlertMode <> "CLOSED" Then
-Begin
-	{ Flash based on bar number }
-	{ Alternates every Input_FlashInterval bars }
-	
-	Flag_FlashState = (Mod(CurrentBar, Input_FlashInterval * 2) < Input_FlashInterval) ;
-	
-	If Flag_FlashState Then
-	Begin
-		{ Flash ON }
-		If Text_AlertMode = "5MIN" Then
-			SetPlotBGColor(1, RGB(200, 255, 200))  { Light green }
-		Else If Text_AlertMode = "1MIN" Then
-			SetPlotBGColor(1, RGB(255, 200, 200)) ;  { Light red }
-	End
-	Else
-		SetPlotBGColor(1, White) ;  { Flash OFF }
-End
-Else
-	SetPlotBGColor(1, White) ;
