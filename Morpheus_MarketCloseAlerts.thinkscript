@@ -1,0 +1,94 @@
+# ################################################
+# INDICATOR: Morpheus_MarketCloseAlerts
+# Project Morpheus - Multi - Interval Alert System for Thinkorswim
+# ################################################
+# VERSION: TOS 1.0
+# PURPOSE:
+# Alert system that escalates as market close approaches:
+# - 30 mins before: 5 - min intervals
+# - 10 mins before: 1 - min intervals
+# - Includes manual position context and MTF trend alignment
+# ################################################
+
+input Market_Close_Time = 1600; # 4:00 PM EST
+input Start_Alerts_Before_Close = 30;
+input Urgent_Alerts_Before_Close = 10;
+
+input Show_Visual_Labels = yes;
+input Show_Historical_Bubbles = no;
+input Enable_Audio = yes;
+
+# POSITION CONTEXT(Manual Input for Study Mode)
+input My_Position = { default FLAT, LONG, SHORT };
+
+# TREND SETTINGS
+input Check_1H_Trend = yes;
+input Trend_Fast_MA = 21;
+
+# ################################################
+# SECTION 1: TIME CALCULATIONS
+# ################################################
+
+def totalSecondsToClose = SecondsTillTime(Market_Close_Time);
+def minutesToClose = Floor(totalSecondsToClose / 60);
+def currentMinuteOfHour = Floor((GetTime() / 60000) % 60);
+
+# ################################################
+# SECTION 2: TREND ANALYSIS(MTF)
+# ################################################
+
+def close1H = close(period = AggregationPeriod.HOUR);
+def sma1H = Average(close1H, Trend_Fast_MA);
+def trend1H = if !Check_1H_Trend then 0
+              else if close1H > sma1H then 1 
+              else if close1H < sma1H then - 1
+else 0;
+
+def isBull = trend1H == 1;
+def isBear = trend1H == -1;
+
+# ################################################
+# SECTION 3: ALERT LOGIC
+# ################################################
+
+def inAlertWindow = minutesToClose <= Start_Alerts_Before_Close and minutesToClose >= 0;
+def isUrgent = minutesToClose <= Urgent_Alerts_Before_Close;
+
+# Alert Trigger: Every 5 mins if in start window, every 1 min if urgent
+def trigger5Min = !isUrgent and(currentMinuteOfHour % 5 == 0);
+def trigger1Min = isUrgent;
+
+def shouldAlert = inAlertWindow and(trigger5Min or trigger1Min);
+
+# Prevent duplicate alerts on same minute(real - time only)
+def alertCondition = shouldAlert and secondsFromTime(Market_Close_Time) < 0;
+
+# ################################################
+# SECTION 4: CONTEXT MESSAGING
+# ################################################
+
+def conflict = (My_Position == My_Position.LONG and isBear) or(My_Position == My_Position.SHORT and isBull);
+
+AddLabel(Show_Visual_Labels,
+    "TIME TO CLOSE: " + minutesToClose + " MIN" +
+    (if My_Position == My_Position.LONG then " | POS: LONG" else if My_Position == My_Position.SHORT then " | POS: SHORT" else " | POS: FLAT") +
+        (if Check_1H_Trend then(if isBull then " | 1H: BULL" else if isBear then " | 1H: BEAR" else " | 1H: NEUTRAL") else "") +
+            (if conflict then " !!! CLOSE POS !!!" else ""),
+if isUrgent then Color.RED else if isBull then Color.UPTICK else if isBear then Color.DOWNTICK else Color.GRAY
+);
+
+# ################################################
+# SECTION 5: ALERTS & BUBBLES
+# ################################################
+
+Alert(alertCondition and Enable_Audio,
+    "MARKET CLOSE ALERT: " + minutesToClose + " mins remaining.",
+    Alert.BAR, 
+    if isUrgent then Sound.RING else Sound.Bell
+);
+
+AddChartBubble(Show_Historical_Bubbles and shouldAlert, high,
+    minutesToClose + " MIN", 
+    if isUrgent then Color.RED else Color.YELLOW,
+    yes
+);
